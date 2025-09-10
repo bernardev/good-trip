@@ -1,0 +1,17 @@
+{
+  "name": "goodtrip",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "concurrently -n web,api -c auto \"npm:dev-web\" \"npm:dev-api\"",
+    "dev-web": "npm run dev -w web",
+    "dev-api": "npm run dev -w api",
+    "build": "npm run build -w web && npm run build -w api",
+    "lint": "npm run lint -w web",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "prettier": "^3.3.3"
+  }
+}

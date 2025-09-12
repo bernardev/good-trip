@@ -26,3 +26,73 @@ html, body { background: var(--color-bg); color: var(--color-ink); }
   transition: transform .25s ease; opacity:.6
 }
 .link-underline:hover::after { transform:scaleX(1) }
+
+/* === animações e helpers "wow" === */
+@keyframes floaty {
+  0% { transform: translate(0,0) scale(1); }
+  50% { transform: translate(10px,-8px) scale(1.02); }
+  100% { transform: translate(0,0) scale(1); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shine {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
+/* inputs padrão do widget */
+.input {
+  height: 3rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-cloud);
+  background: white;
+  padding: 0 0.75rem;
+  outline: none;
+}
+.input::placeholder { color: color-mix(in oklab, var(--color-ink) 55%, transparent); }
+
+/* botão com "shine" */
+.btn-cta {
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+.btn-cta::after{
+  content:"";
+  position:absolute; inset:0;
+  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.35) 40%, transparent 80%);
+  transform: translateX(-120%);
+}
+.btn-cta:hover::after{ animation: shine 900ms linear; }
+
+/* chips animação sutil */
+.animate-floaty { animation: floaty 9s ease-in-out infinite; }
+.animate-fade-up { animation: fade-up .45s ease both; }
+
+/* === Intro overlay (animação de entrada) === */
+@keyframes introPop {
+  0% { transform: scale(.85); opacity: 0 }
+  60%{ transform: scale(1.02); opacity: 1 }
+  100%{ transform: scale(1) }
+}
+@keyframes introFade {
+  0% { opacity: 1 }
+  70%{ opacity: 1 }
+  100%{ opacity: 0 }
+}
+@keyframes introWipe {
+  0% { transform: translateX(-120%) }
+  60%{ transform: translateX(120%) }
+  100%{ transform: translateX(120%) }
+}
+.intro-card { animation: introPop .8s cubic-bezier(.16,1,.3,1) both; }
+.animate-introFade { animation: introFade 1.6s ease .35s forwards }
+.intro-wipe {
+  position:absolute; top:0; bottom:0; left:0; width:42%;
+  background: var(--color-accent);
+  box-shadow: 0 20px 40px rgba(0,0,0,.25);
+  transform: translateX(-120%);
+  animation: introWipe 1.2s .2s cubic-bezier(.2,.8,.2,1) both;
+}

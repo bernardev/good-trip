@@ -42,8 +42,8 @@ export default function IntroReveal() {
           </div>
         </div>
       </div>
-      {/* wipe dourado */}
-      <div className="intro-wipe" />
+      
+      
     </div>
   );
 }

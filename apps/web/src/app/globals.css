@@ -141,3 +141,16 @@ html, body { background: var(--color-bg); color: var(--color-ink); }
   border-radius: inherit;
   transition: background .18s ease;
 }
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); } /* metade porque duplicamos a trilha */
+}
+.marquee-track {
+  display: flex; gap: 32px; width: max-content;
+  animation: marquee 28s linear infinite;
+}
+.marquee:hover .marquee-track { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; }
+}

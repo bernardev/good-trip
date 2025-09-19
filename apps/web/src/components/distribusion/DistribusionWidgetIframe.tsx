@@ -15,21 +15,30 @@ export default function DistribusionWidgetIframe({
   height = 260,
 }: Props) {
   // garante número e fallback seguro
-  const partnerNum =
+  const partnerNum: number =
     Number(partner) ||
     Number(process.env.NEXT_PUBLIC_DISTRIBUSION_PARTNER) ||
     814999;
 
-  // id único para canalizar mensagens deste iframe
-  const frameId = useRef(`dist-${Math.random().toString(36).slice(2)}`).current;
-
+  // id único p/ mensagens; só é definido após o mount (evita hydration diff)
+  const frameIdRef = useRef<string>("");
   const [iframeHeight, setIframeHeight] = useState<number>(height);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // HTML injetado no iframe (memo para evitar recarregar a cada render)
-  const html = useMemo(
-    () =>
-      `
+  // montado no cliente?
+  const [mounted, setMounted] = useState<boolean>(false);
+  useEffect(() => setMounted(true), []);
+
+  // HTML do iframe — só é criado após mount para evitar mismatch SSR/CSR
+  const html = useMemo<string>(() => {
+    if (!mounted) return "";
+    // gera id uma única vez no cliente
+    if (!frameIdRef.current) {
+      frameIdRef.current = `dist-${Math.random().toString(36).slice(2)}`;
+    }
+    const frameId = frameIdRef.current;
+
+    return `
 <!doctype html>
 <html lang="pt-BR">
   <head>
@@ -54,7 +63,8 @@ export default function DistribusionWidgetIframe({
     <script src="https://book.distribusion.com/sdk.1.0.0.js"></script>
     <script>
       (function(){
-        // função para enviar altura atual ao parent
+        var ROOT = document.getElementById('distribusion-search');
+
         function postHeight() {
           try {
             var h = Math.max(
@@ -65,72 +75,73 @@ export default function DistribusionWidgetIframe({
           } catch(e) { /* noop */ }
         }
 
-        // Observa mudanças de layout e reporta
-        var ro = new ResizeObserver(postHeight);
+        var ro = new ResizeObserver(function(){ requestAnimationFrame(postHeight); });
         ro.observe(document.documentElement);
         if (document.body) ro.observe(document.body);
 
-        // monta o widget em PT-BR
         function mountWidget(){
           if (window.Distribusion && window.Distribusion.Search && typeof window.Distribusion.Search.mount === 'function') {
             window.Distribusion.Search.mount({
-              root: document.getElementById('distribusion-search'),
+              root: ROOT,
               partnerNumber: ${partnerNum},
-              // Sinalizações de idioma/país (ignoradas se não suportadas)
               locale: 'pt-BR',
               language: 'pt-BR',
               country: 'BR'
             });
-            // mede após montar
             setTimeout(postHeight, 80);
             setTimeout(postHeight, 300);
           }
         }
 
-        // tenta montar quando a lib carregar
         if (document.readyState === 'complete') {
           mountWidget();
         } else {
           window.addEventListener('load', mountWidget);
         }
 
-        // medida inicial
         postHeight();
       })();
     </script>
   </body>
-</html>`.trim(),
-    [partnerNum, frameId]
-  );
+</html>`.trim();
+  // depende apenas do mount e do partnerNum (ambos estáveis no cliente)
+  }, [mounted, partnerNum]);
 
   // Ouve mensagens de altura vindas do iframe
   useEffect(() => {
+    if (!mounted) return;
+
     function onMessage(e: MessageEvent) {
+      const fid = frameIdRef.current;
       if (
         e?.data &&
         e.data.type === "distribusion-iframe-height" &&
-        e.data.id === frameId &&
+        e.data.id === fid &&
         typeof e.data.height === "number"
       ) {
-        // altura mínima razoável
         const newH = Math.max(200, Math.ceil(e.data.height));
         setIframeHeight(newH);
       }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [frameId]);
+  }, [mounted]);
 
   return (
     <div className={`rounded-xl overflow-hidden ${className}`}>
-      <iframe
-        ref={iframeRef}
-        title="Busca de ônibus — Distribusion"
-        srcDoc={html}
-        style={{ width: "100%", height: iframeHeight, border: 0, background: "transparent" }}
-        // precisa de same-origin + scripts para o auto-resize e o SDK
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-      />
+      {mounted ? (
+        <iframe
+          ref={iframeRef}
+          title="Busca de ônibus — Distribusion"
+          srcDoc={html}
+          style={{ width: "100%", height: iframeHeight, border: 0, background: "transparent" }}
+          // precisa de same-origin + scripts para o auto-resize e o SDK
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+        />
+      ) : (
+        // placeholder opcional durante SSR/hidratação
+        <div style={{ width: "100%", height, border: 0, background: "transparent" }} />
+      )}
     </div>
   );
 }

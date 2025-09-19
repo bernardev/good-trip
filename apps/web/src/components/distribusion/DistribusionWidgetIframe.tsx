@@ -54,57 +54,36 @@ export default function DistribusionWidgetIframe({
     <script src="https://book.distribusion.com/sdk.1.0.0.js"></script>
     <script>
       (function(){
-        var ROOT = document.getElementById('distribusion-search');
-
-        // função para enviar altura atual ao parent (mais robusta)
+        // função para enviar altura atual ao parent
         function postHeight() {
           try {
-            var rootBox = ROOT ? ROOT.getBoundingClientRect() : { height: 0, bottom: 0 };
-            var hCandidates = [
-              Math.ceil(rootBox.bottom),                         // fim visual do widget
-              Math.ceil(rootBox.height),                         // altura do root
+            var h = Math.max(
               document.documentElement.scrollHeight || 0,
-              document.body ? document.body.scrollHeight : 0,
-              document.documentElement.offsetHeight || 0,
-              document.body ? document.body.offsetHeight : 0,
-              document.documentElement.clientHeight || 0,
-              document.body ? document.body.clientHeight : 0
-            ];
-            // margem anti-corte de 12px
-            var h = Math.max.apply(Math, hCandidates) + 12;
+              document.body ? document.body.scrollHeight : 0
+            );
             parent.postMessage({ type: 'distribusion-iframe-height', id: '${frameId}', height: h }, '*');
           } catch(e) { /* noop */ }
         }
 
         // Observa mudanças de layout e reporta
-        var ro = new ResizeObserver(function(){ requestAnimationFrame(postHeight); });
+        var ro = new ResizeObserver(postHeight);
         ro.observe(document.documentElement);
         if (document.body) ro.observe(document.body);
-        if (ROOT) ro.observe(ROOT);
-
-        // Observa mutações do DOM do widget (inputs/calendário abrindo, etc.)
-        var mo = new MutationObserver(function(){ requestAnimationFrame(postHeight); });
-        if (ROOT) mo.observe(ROOT, { childList: true, subtree: true, attributes: true });
-
-        // remedir em resize do iframe/viewport
-        window.addEventListener('resize', postHeight);
 
         // monta o widget em PT-BR
         function mountWidget(){
           if (window.Distribusion && window.Distribusion.Search && typeof window.Distribusion.Search.mount === 'function') {
             window.Distribusion.Search.mount({
-              root: ROOT,
+              root: document.getElementById('distribusion-search'),
               partnerNumber: ${partnerNum},
               // Sinalizações de idioma/país (ignoradas se não suportadas)
               locale: 'pt-BR',
               language: 'pt-BR',
               country: 'BR'
             });
-            // medições escalonadas após montar (captura expansões tardias)
-            setTimeout(postHeight, 60);
-            setTimeout(postHeight, 250);
-            setTimeout(postHeight, 800);
-            setTimeout(postHeight, 1600);
+            // mede após montar
+            setTimeout(postHeight, 80);
+            setTimeout(postHeight, 300);
           }
         }
 

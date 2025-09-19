@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -15,6 +16,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
+      <head>
+        {/* Distribusion SDK assets */}
+
+      </head>
       <body className={`${dmSans.className} min-h-dvh antialiased bg-bg text-ink`}>
         <IntroReveal />
         <Header />

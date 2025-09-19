@@ -5,11 +5,11 @@ import { useEffect, useRef } from "react";
 type Props = {
   partner?: string | number;   // default: env
   className?: string;
-  /** Mantido apenas por compatibilidade; não usado sem iframe */
+  /** Mantido por compatibilidade; não usado aqui */
   height?: number;
 };
 
-// Tipos do SDK
+// Tipos do SDK Distribusion
 interface DistribusionSearch {
   mount(options: {
     root: HTMLElement;
@@ -28,24 +28,10 @@ declare global {
   }
 }
 
-// Garante CSS apenas uma vez
-function ensureCssOnce(id: string, href: string): void {
-  if (typeof document === "undefined") return;
-  if (document.getElementById(id)) return;
-  const link = document.createElement("link");
-  link.id = id;
-  link.rel = "stylesheet";
-  link.href = href;
-  document.head.appendChild(link);
-}
-
-// Carrega o JS do SDK apenas uma vez
+/** Carrega o JS do SDK apenas uma vez (global) */
 function ensureScriptOnce(id: string, src: string): Promise<void> {
   return new Promise((resolve) => {
-    if (typeof document === "undefined") {
-      resolve();
-      return;
-    }
+    if (typeof document === "undefined") return resolve();
     const existing = document.getElementById(id) as HTMLScriptElement | null;
     if (existing) {
       if (existing.dataset.loaded === "1") resolve();
@@ -72,21 +58,43 @@ export default function DistribusionWidgetIframe({
   partner = process.env.NEXT_PUBLIC_DISTRIBUSION_PARTNER ?? "814999",
   className = "",
 }: Props) {
+  // partner como number, com fallback seguro
   const partnerNumber: number = (() => {
-    const raw = String(partner);
-    const n = Number(raw);
+    const n = Number(String(partner));
     return Number.isFinite(n) ? n : 814999;
   })();
 
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  // host do Shadow DOM
+  const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    ensureCssOnce("dist-sdk-css", "https://book.distribusion.com/sdk.1.0.0.css");
+    const host = hostRef.current;
+    if (!host) return;
 
-    const mount = (): void => {
-      const root = rootRef.current;
+    // cria shadow root (escopo de estilos)
+    const shadow = host.shadowRoot ?? host.attachShadow({ mode: "open" });
+
+    // limpa conteúdo anterior do shadow (navegações client-side)
+    while (shadow.firstChild) shadow.removeChild(shadow.firstChild);
+
+    // injeta o CSS **dentro** do shadow (não vaza pro header)
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://book.distribusion.com/sdk.1.0.0.css";
+    shadow.appendChild(link);
+
+    // container real onde o SDK vai montar
+    const root = document.createElement("div");
+    root.id = "distribusion-search";
+    root.setAttribute("data-locale", "pt-BR");
+    root.setAttribute("data-language", "pt-BR");
+    root.setAttribute("data-country", "BR");
+    shadow.appendChild(root);
+
+    // garante JS do SDK (global)
+    ensureScriptOnce("dist-sdk-js", "https://book.distribusion.com/sdk.1.0.0.js").then(() => {
       const sdk = window.Distribusion;
-      if (!root || !sdk?.Search?.mount) return;
+      if (!sdk?.Search?.mount) return;
 
       sdk.Search.mount({
         root,
@@ -95,25 +103,18 @@ export default function DistribusionWidgetIframe({
         language: "pt-BR",
         country: "BR",
       });
-    };
+    });
 
-    ensureScriptOnce("dist-sdk-js", "https://book.distribusion.com/sdk.1.0.0.js")
-      .then(mount)
-      .catch(() => {
-        // opcional: log/telemetria
-      });
+    // cleanup ao desmontar
+    return () => {
+      while (shadow.firstChild) shadow.removeChild(shadow.firstChild);
+    };
   }, [partnerNumber]);
 
   return (
     <div className={`rounded-xl overflow-hidden ${className}`}>
-      {/* Sem iframe: o widget cresce normalmente e consegue navegar para book.distribusion.com */}
-      <div
-        ref={rootRef}
-        id="distribusion-search"
-        data-locale="pt-BR"
-        data-language="pt-BR"
-        data-country="BR"
-      />
+      {/* O widget vive dentro do Shadow DOM deste host; o CSS não afeta o resto da página */}
+      <div ref={hostRef} />
     </div>
   );
 }

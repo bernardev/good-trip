@@ -76,10 +76,15 @@ export default function OffersCarousel() {
   return (
     <section className="mx-auto max-w-7xl px-4 md:px-8 py-12">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-2xl md:text-3xl font-semibold text-navy">Passagens em destaque</h2>
+        <h2 className="text-2xl md:text-3xl font-semibold text-navy">
+          Passagens em destaque
+        </h2>
+
         <Link
           href="/buscar"
-          className="rounded-full border border-primary text-primary px-4 h-9 grid place-items-center hover:bg-primary hover:text-white transition"
+          className="whitespace-nowrap shrink-0 rounded-full border border-primary text-primary
+                     px-3 md:px-4 h-9 md:h-10 grid place-items-center text-sm md:text-base
+                     hover:bg-primary hover:text-white transition"
         >
           Acessar mais
         </Link>

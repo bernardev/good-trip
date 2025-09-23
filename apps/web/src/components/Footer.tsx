@@ -10,7 +10,7 @@ const exo2 = Exo_2({ subsets: ["latin"], weight: ["600", "700"] });
 export default function Footer() {
   return (
     <footer className="mt-20 border-t border-cloud bg-white">
-      <div className="mx-auto max-w-7xl px-4 md:px-8 py-10 grid gap-10 md:grid-cols-4">
+      <div className="mx-auto max-w-7xl px-4 md:px-8 py-10 grid gap-10 md:grid-cols-5">
         {/* Brand */}
         <div>
           <div className="flex items-center gap-3 mb-3">
@@ -52,7 +52,24 @@ export default function Footer() {
           </ul>
         </div>
 
-        {/* Social + Selo RA */}
+        {/* NOVA COLUNA — Selo Reclame Aqui */}
+        <div>
+          <h4 className={`${exo2.className} font-semibold text-ink mb-3`}>Reclame Aqui</h4>
+          <div className="shrink-0">
+            {/* reserva altura para não sumir antes do script montar */}
+            <div id="reputation-ra" className="min-h-[84px]" />
+            <Script
+              id="ra-embed-reputation"
+              src="https://s3.amazonaws.com/raichu-beta/selos/bundle.js"
+              strategy="afterInteractive"
+              data-id="WGhVUnZYd2o1U0hLUjBBeDpnb29kLXRyaXAtcGFzc2FnZW5zLWx0ZGE="
+              data-target="reputation-ra"
+              data-model="1"
+            />
+          </div>
+        </div>
+
+        {/* Conecte-se (permanece igual, com IG/WA + Cadastur) */}
         <div>
           <h4 className={`${exo2.className} font-semibold text-ink mb-3`}>Conecte-se</h4>
 
@@ -67,7 +84,7 @@ export default function Footer() {
               className="h-10 w-10 grid place-items-center rounded-lg border border-cloud hover:bg-cloud/30 hover:text-primary transition"
             >
               <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.366.062 2.633.35 3.608 1.325.975.975 1.262 2.242 1.324 3.608.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.062 1.366-.35 2.633-1.324 3.608-.975.975-2.242 1.262-3.608 1.324-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.366-.062-2.633-.35-3.608-1.324C2.567 19.566 2.28 18.299 2.218 16.933 2.16 15.667 2.148 15.287 2.148 12s.012-3.584.07-4.85c.062-1.366.35-2.633 1.325-3.608C4.518 1.583 5.785 1.296 7.151 1.234 8.417 1.176 8.797 1.163 12 1.163zm0 2.004c-3.157 0-3.529.012-4.773.07-1.027.047-1.584.218-1.953.364-.492.19-.842.417-1.21.785-.368.368-.595.718-.785 1.21-.146.369-.317.926-.364 1.953-.058 1.244-.07 1.616-.07 4.773s.012 3.529.07 4.773c.047 1.027.218 1.584.364 1.953.19.492.417.842.785 1.21.368.368.718.595 1.21.785.369.146.926.317 1.953.364 1.244.058 1.616.07 4.773.07s3.529-.012 4.773-.07c1.027-.047 1.584-.218 1.953-.364.492-.19.842-.417 1.21-.785.368-.368.595-.718.785-1.21.146-.369.317-.926.364-1.953.058-1.244.07-1.616.07-4.773s-.012-3.529-.07-4.773c-.047-1.027-.218-1.584-.364-1.953-.19-.492-.417-.842-.785-1.21a3.34 3.34 0 00-1.21-.785c-.369-.146-.926-.317-1.953-.364-1.244-.058-1.616-.07-4.773-.07zm0 3.833a5 5 0 110 10 5 5 0 010-10zm0 1.833a3.167 3.167 0 100 6.334 3.167 3.167 0 000-6.334zm5.406-2.072a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z" />
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.366.062 2.633.35 3.608 1.325.975.975 1.262 2.242 1.324 3.608.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.062 1.366-.35 2.633-1.324 3.608-.975.975-2.242 1.262-3.608 1.324-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.366-.062-2.633-.35-3.608-1.324C2.567 19.566 2.28 18.299 2.218 16.933 2.16 15.667 2.148 15.287 2.148 12s.012-3.584.07-4.85c.062-1.366.35-2.633 1.325-3.608C4.518 1.583 5.785 1.296 7.151 1.234 8.417 1.176 8.797 1.163 12 1.163zm0 2.004c-3.157 0-3.529.012-4.773.07-1.027.047-1.584.218-1.953.364-.492.19-.842.417-1.21.785-.368.368-.595.718-.785 1.21-.146.369-.317.926-.364 1.953-.058 1.244-.07 1.616-.07 4.773s.012 3.529.07 4.773c.047 1.027.218 1.584.364 1.953.19.492.417.842.785 1.21.368.368.718.595 1.21.785.369.146.926.317 1.953.364 1.244.058 1.616.07 4.773.07s3.529-.012 4.773-.07z" />
               </svg>
             </a>
 
@@ -85,17 +102,10 @@ export default function Footer() {
             </a>
           </div>
 
-          {/* Selo Reclame Aqui */}
-          <div className="mt-4">
-            <div id="reputation-ra" />
-            <Script
-              id="ra-embed-reputation"
-              src="https://s3.amazonaws.com/raichu-beta/selos/bundle.js"
-              strategy="afterInteractive"
-              data-id="WGhVUnZYd2o1U0hLUjBBeDpnb29kLXRyaXAtcGFzc2FnZW5zLWx0ZGE="
-              data-target="reputation-ra"
-              data-model="1"
-            />
+          {/* Compra Segura + Cadastur */}
+          <div className="mt-4 flex items-center gap-3">
+
+            <Image src="/cadastur.webp" alt="Cadastur" width={120} height={28} className="h-7 w-auto" />
           </div>
         </div>
       </div>

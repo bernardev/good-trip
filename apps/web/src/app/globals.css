@@ -178,3 +178,7 @@ html, body { background: var(--color-bg); color: var(--color-ink); }
   body { padding-top: 64px !important; }
 }
 
+.ui-radio-group {
+  color: #000 !important;
+}
+

@@ -15,15 +15,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR">
-      <head>
-        {/* Distribusion SDK assets */}
-
-      </head>
-      <body className={`${dmSans.className} min-h-dvh antialiased bg-bg text-ink`}>
+    <html lang="pt-BR" className="h-full overflow-x-hidden">
+      <head>{/* Distribusion SDK assets */}</head>
+      <body className={`${dmSans.className} min-h-dvh antialiased bg-bg text-ink overflow-x-hidden`}>
         <IntroReveal />
         <Header />
-        <main className="min-h-[70dvh]">{children}</main>
+        <main className="min-h-[70dvh] w-full">{children}</main>
         <Footer />
       </body>
     </html>

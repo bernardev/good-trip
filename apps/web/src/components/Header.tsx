@@ -73,13 +73,17 @@ export default function Header() {
         </nav>
 
         {/* Ações (desktop) */}
-        <div className="hidden md:flex items-center gap-3">
-          <button className="rounded-lg border border-cloud px-3 h-9 text-[14px] text-ink/80 hover:bg-cloud/30 transition">
+        <div className="hidden md:grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            className="h-11 w-full rounded-lg border border-cloud bg-white text-ink px-4 inline-flex items-center justify-center"
+          >
             PT ▾
           </button>
+
           <Link
             href="/login"
-            className="h-9 rounded-lg bg-primary px-4 text-white text-[14px] font-medium shadow-soft transition active:translate-y-[1px]"
+            className="h-11 w-full rounded-lg bg-primary text-white px-4 inline-flex items-center justify-center"
           >
             Entrar
           </Link>

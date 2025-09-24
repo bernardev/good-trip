@@ -102,16 +102,12 @@ export default function AboutCallout() {
               </div>
 
               {/* Botões */}
-              <div className="mt-7 flex gap-3">
+              <div className="mt-7 flex flex-col sm:flex-row gap-3 w-full">
                 <Link
                   href="/quem-somos"
                   aria-label="Conheça a GoodTrip"
-                  className="btn-cta inline-flex h-12 items-center justify-center rounded-2xl bg-accent text-ink font-semibold tracking-wide px-6 md:px-7 transition duration-300 hover:bg-primary hover:text-white active:translate-y-[1px]"
-                  style={
-                    inView
-                      ? { animation: "fade-up .5s ease both", animationDelay: ".12s" }
-                      : undefined
-                  }
+                  className="btn-cta inline-flex h-12 items-center justify-center rounded-2xl bg-accent text-ink font-semibold tracking-wide text-sm whitespace-nowrap px-5 md:px-7 transition duration-300 hover:bg-primary hover:text-white active:translate-y-[1px] w-full sm:w-auto"
+                  style={inView ? { animation: "fade-up .5s ease both", animationDelay: ".12s" } : undefined}
                 >
                   Conheça a GoodTrip
                 </Link>
@@ -119,12 +115,8 @@ export default function AboutCallout() {
                 <Link
                   href="/contato"
                   aria-label="Fale com a gente"
-                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-cloud bg-white px-6 md:px-7 text-ink tracking-wide transition duration-300 hover:bg-cloud/40 active:translate-y-[1px]"
-                  style={
-                    inView
-                      ? { animation: "fade-up .5s ease both", animationDelay: ".18s" }
-                      : undefined
-                  }
+                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-cloud bg-white text-ink tracking-wide text-sm whitespace-nowrap px-5 md:px-7 transition duration-300 hover:bg-cloud/40 active:translate-y-[1px] w-full sm:w-auto"
+                  style={inView ? { animation: "fade-up .5s ease both", animationDelay: ".18s" } : undefined}
                 >
                   Fale com a gente
                 </Link>

@@ -1,0 +1,15 @@
+{
+  "banner": {
+    "textColor": "#ffffff",
+    "overlay": 0.4
+  },
+  "header": {
+    "nav": []
+  },
+  "footer": {
+    "cnpj": "",
+    "address": "",
+    "links": [],
+    "socials": []
+  }
+}

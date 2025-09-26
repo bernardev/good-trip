@@ -11,7 +11,7 @@ const exo2 = Exo_2({ subsets: ["latin"], weight: ["600", "700"] });
 const NAV = [
   { href: "/quem-somos", label: "Quem Somos" },
   { href: "/passagens", label: "Passagens" },
-  { href: "/pacotes", label: "Passagens Áereas" },
+  { href: "https://www.comprarviagem.com.br/goodtrippassagens", label: "Passagens Áereas" },
   { href: "/contato", label: "Contato" },
 ];
 

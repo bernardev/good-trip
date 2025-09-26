@@ -1,4 +1,6 @@
+// apps/web/src/app/contato/page.tsx
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 import ContactForm from "@/components/contact/ContactForm";
@@ -42,9 +44,21 @@ export default function ContatoPage() {
             </div>
           </div>
 
-          {/* Info lateral */}
+          {/* Info lateral + IMAGEM */}
           <aside className="rounded-2xl border border-cloud bg-white p-5 sm:p-6 shadow-soft">
-            <h3 className="font-semibold text-ink">Canais oficiais</h3>
+            {/* Imagem */}
+            <div className="relative w-full aspect-[1/1] sm:aspect-[5/6] rounded-xl overflow-hidden border border-cloud/60">
+              <Image
+                src="/contato-good-trip.png" // coloque o arquivo em /public/contato-goodtrip.png
+                alt="Atendimento Good Trip — canais de contato e horários"
+                fill
+                className="object-cover"
+                sizes="(min-width:1024px) 28vw, 100vw"
+                priority
+              />
+            </div>
+
+            <h3 className="mt-5 font-semibold text-ink">Canais oficiais</h3>
             <ul className="mt-3 space-y-3 text-sm text-ink/80">
               <li>
                 <span className="font-medium text-ink">E-mail: </span>
@@ -65,7 +79,7 @@ export default function ContatoPage() {
               </li>
               <li>
                 <span className="font-medium text-ink">Horário: </span>
-                Seg. a Sex., 08h–18h (Brasília)
+                Seg. a Sex., 08h–18h • Sáb., 08h–12h (Brasília)
               </li>
               <li>
                 <span className="font-medium text-ink">Endereço: </span>

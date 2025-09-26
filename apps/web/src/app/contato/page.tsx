@@ -62,8 +62,8 @@ export default function ContatoPage() {
             <ul className="mt-3 space-y-3 text-sm text-ink/80">
               <li>
                 <span className="font-medium text-ink">E-mail: </span>
-                <a href="mailto:atendimento@goodtrip.com.br" className="text-primary hover:underline">
-                  atendimento@goodtrip.com.br
+                <a href="mailto:comercial@goodtrip.com.br" className="text-primary hover:underline">
+                  comercial@goodtrip.com.br
                 </a>
               </li>
               <li>

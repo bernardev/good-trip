@@ -216,7 +216,7 @@ export default function Footer(): JSX.Element {
           </span>
 
           <span className="order-3 md:order-3">
-            Feito com <span className="text-accent">EH CODE</span>.
+            Desenvolvido por <span className="text-accent">EH CODE</span>.
           </span>
         </div>
       </div>

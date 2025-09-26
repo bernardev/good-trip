@@ -12,7 +12,7 @@ const NAV = [
   { href: "/quem-somos", label: "Quem Somos" },
   { href: "/passagens", label: "Passagens" },
   { href: "/pacotes", label: "Passagens Áereas" },
-  { href: "/carros", label: "Contato" },
+  { href: "/contato", label: "Contato" },
 ];
 
 export default function Header() {

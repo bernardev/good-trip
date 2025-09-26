@@ -1,40 +1,44 @@
+// app/api/admin/settings/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import fs from "node:fs";
-import path from "node:path";
-import { SettingsSchema, type Settings, DEFAULT_SETTINGS } from "@/../types/settings";
+import { z } from "zod";
+import { SettingsSchema, DEFAULT_SETTINGS, type Settings } from "@/../types/settings";
+import { loadSettings, saveSettings } from "@/lib/settingsStore";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
-const FILE = path.join(process.cwd(), ".data.settings.json");
-
-function read(): Settings {
-  try {
-    const raw = fs.readFileSync(FILE, "utf8");
-    const json = JSON.parse(raw) as unknown;
-    const parsed = SettingsSchema.safeParse(json);
-    return parsed.success ? parsed.data : DEFAULT_SETTINGS;
-  } catch { return DEFAULT_SETTINGS; }
-}
-function write(data: Settings) {
-  fs.writeFileSync(FILE, JSON.stringify(data, null, 2), "utf8");
-}
-
 export async function GET() {
-  return NextResponse.json(read());
+  const data = await loadSettings();
+  return NextResponse.json(data);
 }
 
 export async function PUT(req: Request) {
   const session = await getServerSession(authOptions);
   const isAdmin = session?.user?.email === process.env.ADMIN_EMAIL;
-  if (!isAdmin) return NextResponse.json({ ok:false }, { status: 401 });
+  if (!isAdmin) return NextResponse.json({ ok: false }, { status: 401 });
 
-  const body = (await req.json()) as unknown;
-  const parsed = SettingsSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ ok:false }, { status: 400 });
+  try {
+    const incomingUnknown = await req.json();
+    const incoming = SettingsSchema.parse(incomingUnknown);
 
-  write(parsed.data);
-  return NextResponse.json({ ok:true });
+    const current = await loadSettings();
+    const next: Settings = {
+      ...DEFAULT_SETTINGS,
+      ...current,
+      ...incoming,
+      banner: { ...(current.banner ?? {}), ...(incoming.banner ?? {}) },
+      header: { ...(current.header ?? {}), ...(incoming.header ?? {}) },
+      footer: { ...(current.footer ?? {}), ...(incoming.footer ?? {}) },
+    };
+
+    await saveSettings(next);
+    return NextResponse.json(next); // seu admin só checa res.ok; retornar o objeto ajuda no futuro
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ ok: false, issues: err.issues }, { status: 400 });
+    }
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
 }

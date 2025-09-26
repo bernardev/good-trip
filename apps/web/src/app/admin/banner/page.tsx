@@ -4,9 +4,7 @@ import type { Settings, Banner } from "@/../types/settings";
 
 // remove "", null, undefined
 const stripEmpty = <T extends Record<string, unknown>>(o: T) =>
-  Object.fromEntries(
-    Object.entries(o).filter(([, v]) => v !== "" && v !== null && v !== undefined)
-  ) as Partial<T>;
+  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined)) as Partial<T>;
 
 export default function BannerPage() {
   const [settings, setSettings] = useState<Settings>({ banner: {} });

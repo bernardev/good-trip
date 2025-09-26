@@ -4,11 +4,9 @@ import { useEffect, useState, type ChangeEvent } from "react";
 import type { Settings, Footer } from "@/../types/settings";
 import { DEFAULT_FOOTER_PRESET } from "@/../types/settings";
 
-/** remove campos vazios antes de salvar */
+
 const stripEmpty = <T extends Record<string, unknown>>(o: T) =>
-  Object.fromEntries(
-    Object.entries(o).filter(([, v]) => v !== "" && v !== null && v !== undefined)
-  ) as Partial<T>;
+  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined)) as Partial<T>;
 
 /** dedupe por href (mantém o primeiro) */
 function dedupeByHref<T extends { href: string }>(arr: T[]): T[] {

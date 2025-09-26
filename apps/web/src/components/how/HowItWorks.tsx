@@ -125,8 +125,8 @@ export default function HowItWorks() {
       </div>
 
       {/* glows */}
-      <div aria-hidden className="fx-orb fx-orb--gold w-80 h-80 -left-24 -bottom-10 opacity-40" />
-      <div aria-hidden className="fx-orb fx-orb--blue  w-96 h-96 -right-28 -top-10 opacity-40" />
+      <div aria-hidden className="absolute pointer-events-none -z-10 fx-orb fx-orb--gold w-80 h-80 -left-24 -bottom-10 opacity-40" />
+      <div aria-hidden className="absolute pointer-events-none -z-10 fx-orb fx-orb--blue  w-96 h-96 -right-28 -top-10 opacity-40" />
 
       {/* MODAL com o widget */}
       {open && (

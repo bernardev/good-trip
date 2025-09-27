@@ -1,59 +1,97 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
-  /** tempo mínimo exibindo o preloader (ms) */
-  minTime?: number;
-  /** atraso extra além do minTime (ms) — ex.: 1000 ou 2000 */
-  extraMs?: number;
-  /** frase exibida abaixo do loader */
-  text?: string;
+  /** caminho do vídeo em /public */
+  src?: string;
+  poster?: string;
+  /** permitir ampliar além da resolução nativa? (default: false) */
+  allowUpscale?: boolean;
+  /** duração do fade de saída (ms) */
+  fadeOutMs?: number;
 };
 
-export default function Preloader({
-  minTime = 900,
-  extraMs = 500, // +2s por padrão
-  text = "Carregando as melhores passagens do Brasil…",
+export default function IntroVideoResponsive({
+  src = "/video-intro.mp4",
+  poster,
+  allowUpscale = false,
+  fadeOutMs = 400,
 }: Props) {
-  const [show, setShow] = useState(true);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [visible, setVisible] = useState(true);
+  const [fading, setFading] = useState(false);
+  const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+
+  const recalc = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const natW = v.videoWidth || 16;
+    const natH = v.videoHeight || 9;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    const scaleFit = Math.min(vw / natW, vh / natH);
+    const scale = allowUpscale ? scaleFit : Math.min(scaleFit, 1);
+    setSize({ w: Math.round(natW * scale), h: Math.round(natH * scale) });
+  };
 
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const total = reduce ? 400 : minTime + extraMs;
-    const t = setTimeout(() => setShow(false), total);
-    return () => clearTimeout(t);
-  }, [minTime, extraMs]);
+    const v = videoRef.current;
+    if (!v) return;
 
-  if (!show) return null;
+    const onLoaded = () => {
+      recalc();
+      v.muted = true;
+      v.playsInline = true;
+      void v.play().catch(() => {/* se bloquear, usuário toca e inicia */});
+    };
+
+    const onEnded = () => {
+      // congela no último frame e aplica fade
+      setFading(true);
+      window.setTimeout(() => setVisible(false), Math.max(0, fadeOutMs));
+    };
+
+    if (v.readyState >= 2) onLoaded();
+    else v.addEventListener("loadedmetadata", onLoaded, { once: true });
+
+    v.addEventListener("ended", onEnded);
+
+    const onResize = () => recalc();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+
+    return () => {
+      v.removeEventListener("loadedmetadata", onLoaded);
+      v.removeEventListener("ended", onEnded);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, [allowUpscale, fadeOutMs]);
+
+  if (!visible) return null;
 
   return (
     <div
-      aria-live="polite"
-      aria-busy="true"
-      className="fixed inset-0 z-[70] grid place-items-center bg-white"
+      className={`fixed inset-0 z-[70] bg-white grid place-items-center transition-opacity`}
+      style={{ opacity: fading ? 0 : 1, transitionDuration: `${fadeOutMs}ms` }}
     >
-      <div className="flex flex-col items-center gap-5 px-6">
-        {/* Loader azul (usa sua cor 'primary') */}
-        <div aria-hidden className="relative h-12 w-12">
-          <span className="absolute inset-0 rounded-full border-4 border-primary/20" />
-          <span className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin-smooth" />
-        </div>
-
-        <p className="text-sm md:text-base text-neutral-700 text-center max-w-[32ch]">
-          {text}
-        </p>
-      </div>
-
-      {/* keyframes locais */}
-      <style jsx global>{`
-        @keyframes spin-smooth {
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin-smooth {
-          animation: spin-smooth 0.9s linear infinite;
-        }
-      `}</style>
+      <video
+        ref={videoRef}
+        src={src}
+        poster={poster}
+        autoPlay
+        muted
+        playsInline
+        preload="auto"
+        controls={false}
+        style={{
+          width: size.w ? `${size.w}px` : "auto",
+          height: size.h ? `${size.h}px` : "auto",
+          display: "block",
+        }}
+      />
     </div>
   );
 }

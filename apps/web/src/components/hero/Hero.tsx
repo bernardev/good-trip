@@ -11,9 +11,15 @@ const exo2 = Exo_2({ subsets: ["latin"], weight: ["700"] });
 // util simples p/ limitar números
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
+declare global {
+  interface Window {
+    __gtOpenDeparture?: () => void;
+  }
+}
+
 export default function Hero() {
   const stars = useRef<HTMLDivElement>(null);
-  const searchWrapRef = useRef<HTMLDivElement>(null); // <-- wrapper do card de busca
+  const searchWrapRef = useRef<HTMLDivElement>(null);
   const { settings } = useSettings();
   const b: Banner = settings?.banner ?? {};
 
@@ -31,7 +37,6 @@ export default function Hero() {
   const hasBg: boolean = Boolean(b.bgUrl) && bgReady;
   const overlay: number = clamp(b.overlay ?? 0.4, 0, 0.9);
 
-  // cores vindas do admin
   const titleStyle: CSSProperties | undefined = b.textColor ? { color: b.textColor } : undefined;
   const subtitleStyle: CSSProperties | undefined = b.subtitleColor ? { color: b.subtitleColor } : undefined;
 
@@ -48,46 +53,29 @@ export default function Hero() {
     }
   }, []);
 
-  // --- FIX: mobile 1º toque já abre a lista do campo "De"
+  /** FIX: no mobile, 1º toque já abre a lista do campo “De” */
   useEffect(() => {
     const root = searchWrapRef.current;
     if (!root) return;
 
     const isTouch =
       typeof window !== "undefined" &&
-      (window.matchMedia?.("(pointer:coarse)").matches || "ontouchstart" in window);
+      (window.matchMedia?.("(pointer:coarse)")?.matches || "ontouchstart" in window);
 
     if (!isTouch) return;
 
-    // tenta achar especificamente o input de origem
-    const getFromInput = (): HTMLInputElement | null => {
-      return (
-        (root.querySelector('input[name="from"]') as HTMLInputElement) ||
-        (root.querySelector('input[id*="from" i]') as HTMLInputElement) ||
-        (root.querySelector('[data-field="from"] input') as HTMLInputElement) ||
-        // fallback: primeiro input de texto/combobox visível
-        (root.querySelector('input[type="text"], input[role="combobox"]') as HTMLInputElement)
-      );
+    const handleStart = (_e: Event): void => {
+      // chama o abridor do widget (exposto pelo iframe)
+      window.__gtOpenDeparture?.();
     };
 
-    const handlePointerDown = (e: PointerEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target) return;
+    root.addEventListener("pointerdown", handleStart as EventListener, { capture: true, passive: true });
+    root.addEventListener("touchstart", handleStart as EventListener, { capture: true, passive: true });
 
-      // se tocou diretamente em um campo clicável, não interfere
-      if (target.closest("input, textarea, select, button, [role='combobox']")) return;
-
-      const input = getFromInput();
-      if (!input) return;
-
-      // foca e clica para abrir o dropdown dos "Destinos Populares"
-      input.focus({ preventScroll: true });
-      input.click();
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+    return () => {
+      root.removeEventListener("pointerdown", handleStart as EventListener, true);
+      root.removeEventListener("touchstart", handleStart as EventListener, true);
     };
-
-    root.addEventListener("pointerdown", handlePointerDown, { passive: true, capture: true });
-    return () => root.removeEventListener("pointerdown", handlePointerDown, true);
   }, []);
 
   return (
@@ -107,7 +95,7 @@ export default function Hero() {
         />
       )}
 
-      {/* ornaments (visíveis em ambos os casos) */}
+      {/* ornaments */}
       <div className="fx-orb fx-orb--gold w-80 h-80 -left-24 -top-20 animate-[float_10s_ease-in-out_infinite] -z-10" />
       <div className="fx-orb fx-orb--blue  w-96 h-96 -right-32 -bottom-24 animate-[glow_8s_ease-in-out_infinite] -z-10" />
       <div ref={stars} className="fx-stars -z-10" />

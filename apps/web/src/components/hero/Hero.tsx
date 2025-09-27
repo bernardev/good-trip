@@ -13,6 +13,7 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 
 export default function Hero() {
   const stars = useRef<HTMLDivElement>(null);
+  const searchWrapRef = useRef<HTMLDivElement>(null); // <-- wrapper do card de busca
   const { settings } = useSettings();
   const b: Banner = settings?.banner ?? {};
 
@@ -45,6 +46,48 @@ export default function Hero() {
       dot.style.animationDelay = `${Math.random() * 2}s`;
       el.appendChild(dot);
     }
+  }, []);
+
+  // --- FIX: mobile 1º toque já abre a lista do campo "De"
+  useEffect(() => {
+    const root = searchWrapRef.current;
+    if (!root) return;
+
+    const isTouch =
+      typeof window !== "undefined" &&
+      (window.matchMedia?.("(pointer:coarse)").matches || "ontouchstart" in window);
+
+    if (!isTouch) return;
+
+    // tenta achar especificamente o input de origem
+    const getFromInput = (): HTMLInputElement | null => {
+      return (
+        (root.querySelector('input[name="from"]') as HTMLInputElement) ||
+        (root.querySelector('input[id*="from" i]') as HTMLInputElement) ||
+        (root.querySelector('[data-field="from"] input') as HTMLInputElement) ||
+        // fallback: primeiro input de texto/combobox visível
+        (root.querySelector('input[type="text"], input[role="combobox"]') as HTMLInputElement)
+      );
+    };
+
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target) return;
+
+      // se tocou diretamente em um campo clicável, não interfere
+      if (target.closest("input, textarea, select, button, [role='combobox']")) return;
+
+      const input = getFromInput();
+      if (!input) return;
+
+      // foca e clica para abrir o dropdown dos "Destinos Populares"
+      input.focus({ preventScroll: true });
+      input.click();
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+
+    root.addEventListener("pointerdown", handlePointerDown, { passive: true, capture: true });
+    return () => root.removeEventListener("pointerdown", handlePointerDown, true);
   }, []);
 
   return (
@@ -83,17 +126,16 @@ export default function Hero() {
           )}
         </h1>
 
-        <p
-          className="mt-4 max-w-2xl"
-          style={subtitleStyle}
-        >
+        <p className="mt-4 max-w-2xl" style={subtitleStyle}>
           {b.subtitle || "Compare horários, preços e rotas. Reserve em poucos cliques."}
         </p>
 
         {/* Card de busca */}
         <div className="mt-8 md:mt-12 rounded-2xl gb p-[2px]">
-          {/* ⬇⬇⬇ add text-ink aqui */}
-          <div className="glass rounded-2xl border border-cloud/80 shadow-soft p-4 md:p-6 backdrop-saturate-150 tilt text-ink">
+          <div
+            ref={searchWrapRef}
+            className="glass rounded-2xl border border-cloud/80 shadow-soft p-4 md:p-6 backdrop-saturate-150 tilt text-ink"
+          >
             <SearchTabs />
           </div>
         </div>

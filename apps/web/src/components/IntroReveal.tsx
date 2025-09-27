@@ -1,49 +1,59 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
-import { Exo_2 } from "next/font/google";
-const exo2 = Exo_2({ subsets: ["latin"], weight: ["700"] });
 
-export default function IntroReveal() {
-  const [show, setShow] = useState(false);
+type Props = {
+  /** tempo mínimo exibindo o preloader (ms) */
+  minTime?: number;
+  /** atraso extra além do minTime (ms) — ex.: 1000 ou 2000 */
+  extraMs?: number;
+  /** frase exibida abaixo do loader */
+  text?: string;
+};
+
+export default function Preloader({
+  minTime = 900,
+  extraMs = 500, // +2s por padrão
+  text = "Carregando as melhores passagens do Brasil…",
+}: Props) {
+  const [show, setShow] = useState(true);
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const played = sessionStorage.getItem("introPlayed"); // toque uma vez por aba
-    if (reduce || played) return;
-    setShow(true);
-    const t = setTimeout(() => {
-      setShow(false);
-      sessionStorage.setItem("introPlayed", "1");
-    }, 1750);
+    const total = reduce ? 400 : minTime + extraMs;
+    const t = setTimeout(() => setShow(false), total);
     return () => clearTimeout(t);
-  }, []);
+  }, [minTime, extraMs]);
 
   if (!show) return null;
 
   return (
-    <div aria-hidden className="fixed inset-0 z-[70] overflow-hidden">
-      {/* fundo gradiente + fade */}
-      <div className="absolute inset-0 bg-gradient-to-br from-navy to-primary animate-introFade" />
-      {/* logo + wordmark */}
-      <div className="absolute inset-0 grid place-items-center">
-        <div className="intro-card text-center">
-          <Image
-            src="/logo-goodtrip.jpeg"
-            alt=""
-            width={240}
-            height={64}
-            className="h-12 md:h-14 w-auto drop-shadow"
-            priority
-          />
-          <div className={`${exo2.className} mt-2 text-white/90 text-xl md:text-2xl font-bold tracking-tight`}>
-            GoodTrip
-          </div>
+    <div
+      aria-live="polite"
+      aria-busy="true"
+      className="fixed inset-0 z-[70] grid place-items-center bg-white"
+    >
+      <div className="flex flex-col items-center gap-5 px-6">
+        {/* Loader azul (usa sua cor 'primary') */}
+        <div aria-hidden className="relative h-12 w-12">
+          <span className="absolute inset-0 rounded-full border-4 border-primary/20" />
+          <span className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin-smooth" />
         </div>
+
+        <p className="text-sm md:text-base text-neutral-700 text-center max-w-[32ch]">
+          {text}
+        </p>
       </div>
-      
-      
+
+      {/* keyframes locais */}
+      <style jsx global>{`
+        @keyframes spin-smooth {
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin-smooth {
+          animation: spin-smooth 0.9s linear infinite;
+        }
+      `}</style>
     </div>
   );
 }

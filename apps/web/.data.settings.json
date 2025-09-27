@@ -1,5 +1,6 @@
 {
   "banner": {
+    "bgUrl": "",
     "textColor": "#ffffff",
     "overlay": 0.4
   },

@@ -12,10 +12,10 @@ export default function Page() {
     <>
       <Hero />
       <OffersCarousel />
+      <DestinationsGrid />
       <HowItWorks />
       <PartnersMarquee />
       <AboutCallout />
-      <DestinationsGrid />
 
       {/* Botão flutuante WhatsApp */}
       <div className="fixed right-4 bottom-4 z-50">

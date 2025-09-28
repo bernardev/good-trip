@@ -182,3 +182,12 @@ html, body { background: var(--color-bg); color: var(--color-ink); }
   color: #000 !important;
 }
 
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

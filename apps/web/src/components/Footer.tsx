@@ -168,7 +168,7 @@ export default function Footer(): JSX.Element {
           {/* Ícones sociais — visíveis (text-ink) e com hover */}
           <div className="flex gap-2">
             <a
-              href="https://instagram.com/seuperfil"
+              href="https://www.instagram.com/goodtrip.com.br"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Instagram"

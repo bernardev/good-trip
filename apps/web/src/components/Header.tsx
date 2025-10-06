@@ -19,6 +19,9 @@ function isExternal(href: string) {
   return /^https?:\/\//i.test(href);
 }
 
+const MANAGE_URL =
+  "https://book.distribusion.com/booking/login?retailerPartnerNumber=814999&locale=pt-BR";
+
 export default function Header() {
   const [openMenu, setOpenMenu] = useState(false);
   const [openWidget, setOpenWidget] = useState(false);
@@ -111,34 +114,44 @@ export default function Header() {
         </nav>
 
         {/* Ações (desktop) — CTA abre modal do Distribusion */}
-        <div className="hidden md:flex items-center gap-3">
-          {isAuthed ? (
-            <>
-              <Link
-                href="/admin"
-                className="h-11 rounded-lg border border-cloud bg-white text-ink px-4 inline-flex items-center justify-center"
-              >
-                Painel
-              </Link>
-              <button
-                onClick={() => signOut({ callbackUrl: "/login" })}
-                className="h-11 rounded-lg bg-primary text-white px-4 inline-flex items-center justify-center"
-              >
-                Sair
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setOpenWidget(true)}
-              className="h-11 rounded-lg bg-primary text-white px-4 inline-flex items-center justify-center"
-              aria-haspopup="dialog"
-              aria-controls="header-widget"
+          <div className="hidden md:flex items-center gap-3">
+            {/* Botão 'Gerenciar reserva' — sempre visível */}
+            <a
+              href={MANAGE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-11 rounded-lg border border-cloud bg-white text-ink px-4 inline-flex items-center justify-center"
             >
-              {ctaLabel}
-            </button>
-          )}
-        </div>
+              Gerenciar reserva
+            </a>
+
+            {isAuthed ? (
+              <>
+                <Link
+                  href="/admin"
+                  className="h-11 rounded-lg border border-cloud bg-white text-ink px-4 inline-flex items-center justify-center"
+                >
+                  Painel
+                </Link>
+                <button
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  className="h-11 rounded-lg bg-primary text-white px-4 inline-flex items-center justify-center"
+                >
+                  Sair
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setOpenWidget(true)}
+                className="h-11 rounded-lg bg-primary text-white px-4 inline-flex items-center justify-center"
+                aria-haspopup="dialog"
+                aria-controls="header-widget"
+              >
+                {ctaLabel}
+              </button>
+            )}
+          </div>
 
         {/* Hamburger (mobile) */}
         <button
@@ -246,42 +259,53 @@ export default function Header() {
                 })}
               </nav>
 
-              {/* Ações */}
-              <div className="mt-8 grid grid-cols-1 gap-3">
-                {isAuthed ? (
-                  <>
-                    <Link
-                      href="/admin"
-                      className="h-11 rounded-lg border border-cloud bg-white text-ink grid place-items-center"
-                      onClick={() => setOpenMenu(false)}
-                    >
-                      Painel
-                    </Link>
+                {/* Ações */}
+                <div className="mt-8 grid grid-cols-1 gap-3">
+                  {/* Botão 'Gerenciar reserva' — sempre visível no mobile */}
+                  <a
+                    href={MANAGE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-11 rounded-lg border border-cloud bg-white text-ink grid place-items-center"
+                    onClick={() => setOpenMenu(false)}
+                  >
+                    Gerenciar reserva
+                  </a>
+
+                  {isAuthed ? (
+                    <>
+                      <Link
+                        href="/admin"
+                        className="h-11 rounded-lg border border-cloud bg-white text-ink grid place-items-center"
+                        onClick={() => setOpenMenu(false)}
+                      >
+                        Painel
+                      </Link>
+                      <button
+                        className="h-11 rounded-lg bg-primary text-white"
+                        onClick={() => {
+                          setOpenMenu(false);
+                          signOut({ callbackUrl: "/login" });
+                        }}
+                      >
+                        Sair
+                      </button>
+                    </>
+                  ) : (
                     <button
-                      className="h-11 rounded-lg bg-primary text-white"
+                      type="button"
+                      className="h-11 rounded-lg bg-primary text-white grid place-items-center"
                       onClick={() => {
                         setOpenMenu(false);
-                        signOut({ callbackUrl: "/login" });
+                        setOpenWidget(true);
                       }}
+                      aria-haspopup="dialog"
+                      aria-controls="header-widget"
                     >
-                      Sair
+                      {ctaLabel}
                     </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="h-11 rounded-lg bg-primary text-white grid place-items-center"
-                    onClick={() => {
-                      setOpenMenu(false);
-                      setOpenWidget(true);
-                    }}
-                    aria-haspopup="dialog"
-                    aria-controls="header-widget"
-                  >
-                    {ctaLabel}
-                  </button>
-                )}
-              </div>
+                  )}
+                </div>
 
               {isAuthed && (
                 <p className="mt-6 text-xs text-ink/60">Logado como {adminName}</p>

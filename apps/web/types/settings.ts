@@ -60,7 +60,7 @@ export const DEFAULT_HEADER_PRESET: Header = {
   phone: "",
   whatsapp: "",
   nav: [
-    { label: "Quem Somos", href: "/sobre" },
+    { label: "Quem Somos", href: "/quem-somos" },
     { label: "Passagens",  href: "/buscar" },
     { label: "Contato",    href: "/contato" },
   ],
@@ -70,12 +70,12 @@ export const DEFAULT_FOOTER_PRESET: Footer = {
   cnpj: "57.355.709/0001-27",
   address: "",
   links: [
-    { label: "Sobre",         href: "/sobre" },
+    { label: "Sobre",         href: "/quem-somos" },
     { label: "Termos de uso", href: "/termos" },
     { label: "Privacidade",   href: "/privacidade" },
   ],
   socials: [
-    { network: "instagram", href: "https://instagram.com/seuperfil" },
+    { network: "instagram", href: "https://instagram.com/goodtrip.com.br" },
     { network: "whatsapp",  href: "https://wa.me/5593991436570" },
   ],
 };

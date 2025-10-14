@@ -5,19 +5,35 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useGeo } from "@/hooks/useGeo";
 
-/* Tipos */
+/* Tipos mínimos do público /api/settings */
+type OfferItem = {
+  id: string;
+  from: string;
+  to: string;
+  priceCents: number;
+  img?: string;
+  active?: boolean;
+  order?: number;
+};
+type Settings = {
+  offers?: OfferItem[];
+};
+
+/* Tipos internos do carrossel */
 type Offer = { id: string; from: string; to: string; priceCents: number; img: string };
 
 type NearbyApiResp = { origin_city: string; origin_lat: number; origin_lng: number; label: string };
 type PopularItem = { city: string; uf: string; fromCents: number };
 type PopularApiResp = { items: PopularItem[] };
 
-/* Fallback básico se API cair */
+const DEFAULT_IMG = "/logo-goodtrip.jpeg";
+
+/* Fallback básico */
 const FALLBACK: Offer[] = [
-  { id: "cwb-joi", from: "Curitiba, PR", to: "Joinville, SC",         priceCents: 4399,  img: "/logo-goodtrip.jpeg" },
-  { id: "cwb-fln", from: "Curitiba, PR", to: "Florianópolis, SC",     priceCents: 4499,  img: "/logo-goodtrip.jpeg" },
-  { id: "cwb-sp",  from: "Curitiba, PR", to: "São Paulo - Tietê, SP", priceCents: 4899,  img: "/logo-goodtrip.jpeg" },
-  { id: "cwb-poa", from: "Curitiba, PR", to: "Porto Alegre, RS",      priceCents: 11299, img: "/logo-goodtrip.jpeg" },
+  { id: "cwb-joi", from: "Curitiba, PR", to: "Joinville, SC",         priceCents: 4399,  img: DEFAULT_IMG },
+  { id: "cwb-fln", from: "Curitiba, PR", to: "Florianópolis, SC",     priceCents: 4499,  img: DEFAULT_IMG },
+  { id: "cwb-sp",  from: "Curitiba, PR", to: "São Paulo - Tietê, SP", priceCents: 4899,  img: DEFAULT_IMG },
+  { id: "cwb-poa", from: "Curitiba, PR", to: "Porto Alegre, RS",      priceCents: 11299, img: DEFAULT_IMG },
 ];
 
 export default function OffersCarousel() {
@@ -25,12 +41,44 @@ export default function OffersCarousel() {
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
   const [active, setActive] = useState(0);
 
-  // origem dinâmica + ofertas
   const geo = useGeo();
   const [offers, setOffers] = useState<Offer[]>(FALLBACK);
+  const [hasAdminOffers, setHasAdminOffers] = useState(false);
 
-  // Buscar origem e ofertas (mesma lógica do DestinationsGrid)
+  /* 1) Tenta carregar do admin (/api/settings) */
   useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/settings", { cache: "no-store" });
+        if (!r.ok) throw new Error("settings_failed");
+        const s: Settings = await r.json();
+
+        const list = (s?.offers ?? [])
+          .filter((o) => (o.active ?? true) && o.from && o.to && Number.isFinite(o.priceCents))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.id).localeCompare(String(b.id)))
+          .map<Offer>((o) => ({
+            id: String(o.id),
+            from: o.from,
+            to: o.to,
+            priceCents: o.priceCents,
+            img: DEFAULT_IMG, // sempre padrão Good Trip
+          }));
+
+        if (list.length) {
+          setOffers(list);
+          setHasAdminOffers(true);
+        } else {
+          setHasAdminOffers(false);
+        }
+      } catch {
+        setHasAdminOffers(false);
+      }
+    })();
+  }, []);
+
+  /* 2) Se não houver admin, usa geo+popular */
+  useEffect(() => {
+    if (hasAdminOffers) return;
     if (!geo) return;
 
     (async () => {
@@ -51,7 +99,7 @@ export default function OffersCarousel() {
           from: fromLabel,
           to: `${x.city}${x.uf ? `, ${x.uf}` : ""}`,
           priceCents: x.fromCents,
-          img: "/logo-goodtrip.jpeg",
+          img: DEFAULT_IMG,
         }));
 
         setOffers(list.length ? list : FALLBACK);
@@ -59,9 +107,9 @@ export default function OffersCarousel() {
         setOffers(FALLBACK);
       }
     })();
-  }, [geo]);
+  }, [geo, hasAdminOffers]);
 
-  // centraliza index com precisão
+  /* centraliza index */
   const scrollToIndex = (idx: number) => {
     const track = trackRef.current;
     const card = cardRefs.current[idx];
@@ -70,7 +118,7 @@ export default function OffersCarousel() {
     track.scrollTo({ left: target, behavior: "smooth" });
   };
 
-  // calcula item mais central e aplica coverflow leve
+  /* coverflow leve + item ativo */
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;

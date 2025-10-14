@@ -40,17 +40,34 @@ export const FooterSchema = z.object({
   })).optional(),
 });
 
+/* Offers (para o carrossel) */
+export const OfferItemSchema = z.object({
+  id: z.string().min(1),                 // slug/identificador
+  from: z.string().min(1),               // ex.: "Curitiba, PR"
+  to: z.string().min(1),                 // ex.: "Florianópolis, SC"
+  priceCents: z.number().int().min(0),   // preço em centavos
+  img: z.union([
+    z.string().url(),                    // URL absoluta
+    InternalPath,                        // caminho público local ("/logo-goodtrip.jpeg")
+    z.literal(""),                       // permitir vazio (front faz fallback)
+  ]).optional(),
+  active: z.boolean().optional(),        // default true no consumo
+  order: z.number().int().min(1).optional(), // ordenação asc
+});
+
 /* Settings (raiz) */
 export const SettingsSchema = z.object({
   banner: BannerSchema.optional(),
   header: HeaderSchema.optional(),
   footer: FooterSchema.optional(),
+  offers: z.array(OfferItemSchema).optional(), // << NOVO
 });
 
 export type Banner = z.infer<typeof BannerSchema>;
 export type Header = z.infer<typeof HeaderSchema>;
 export type HeaderLink = z.infer<typeof HeaderLinkSchema>;
 export type Footer = z.infer<typeof FooterSchema>;
+export type OfferItem = z.infer<typeof OfferItemSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
 
 /* Presets */
@@ -85,4 +102,5 @@ export const DEFAULT_SETTINGS: Settings = {
   banner: { title: "", subtitle: "", ctaLabel: "", bgUrl: "" },
   header: { ...DEFAULT_HEADER_PRESET },
   footer: { ...DEFAULT_FOOTER_PRESET },
+  offers: [], // inicia vazio; front usa admin->offers, geo ou FALLBACK
 };

@@ -9,11 +9,12 @@ import SignOutButton from "@/components/admin/SignOutButton";
 export const metadata = { title: "Admin — GoodTrip" };
 
 const NAV = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/banner", label: "Banner" },
-  { href: "/admin/header", label: "Header" },
-  { href: "/admin/footer", label: "Footer" },
-  { href: "/admin/seo", label: "SEO" },
+  { href: "/admin",         label: "Dashboard" },
+  { href: "/admin/banner",  label: "Banner" },
+  { href: "/admin/offers",  label: "Ofertas" }, // << adicionado
+  { href: "/admin/header",  label: "Header" },
+  { href: "/admin/footer",  label: "Footer" },
+  { href: "/admin/seo",     label: "SEO" },
 ] as const;
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {

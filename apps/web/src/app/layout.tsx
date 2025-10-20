@@ -11,8 +11,8 @@ import { Providers } from "../providers"; // ← usa SessionProvider
 const dmSans = DM_Sans({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "GoodTrip — sua viagem em um só lugar",
-  description: "Passagens, hospedagens, pacotes, carros e eventos.",
+  title: "GoodTrip - seu destino começa aqui!",
+  description: "+ de 200 empresas de ônibus em um só lugar!",
 };
 
 const GTM_ID = "GTM-TGXL5FVV";

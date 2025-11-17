@@ -3,10 +3,10 @@
 
 import { UnifiedTripSearchV2 } from '@/components/UnifiedTripSearchV2';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { Bus, Sparkles } from 'lucide-react';
 
-export default function BuscarTestePage() {
+function BuscarTesteContent() {
   const searchParams = useSearchParams();
   const [autoSearch, setAutoSearch] = useState(false);
 
@@ -82,5 +82,36 @@ export default function BuscarTestePage() {
         />
       </div>
     </div>
+  );
+}
+
+// Loading fallback
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-sky-50">
+      <div className="bg-gradient-to-r from-blue-600 to-sky-600 text-white py-8 md:py-12 shadow-xl">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-center gap-4">
+            <div className="relative p-4 bg-white/20 backdrop-blur-sm rounded-2xl shadow-lg">
+              <Bus className="w-10 h-10 md:w-12 md:h-12 text-white animate-pulse" />
+            </div>
+            <div>
+              <h1 className="text-3xl md:text-5xl font-black text-white">
+                Carregando...
+              </h1>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Componente principal com Suspense
+export default function BuscarTestePage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <BuscarTesteContent />
+    </Suspense>
   );
 }

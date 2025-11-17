@@ -1,3 +1,5 @@
+// apps/web/src/services/trip-aggregator.ts
+
 import { 
   UnifiedTrip, 
   SearchParams, 
@@ -178,12 +180,12 @@ export class TripAggregatorService {
   }
 
   /**
-   * Busca todas as cidades disponíveis de ambos provedores
+   * Busca todas as cidades disponíveis (apenas Distribusion)
    */
   async getAllCities(): Promise<CityWithProvider[]> {
-    const [distribusionCities, viopCities] = await Promise.allSettled([
+    // ✅ CORRIGIDO: Busca apenas cidades da Distribusion
+    const [distribusionCities] = await Promise.allSettled([
       this.distribusion.getCities(),
-      this.viop.getCities(),
     ]);
 
     const allCities: CityWithProvider[] = [];
@@ -197,15 +199,7 @@ export class TripAggregatorService {
       );
     }
 
-    if (viopCities.status === 'fulfilled') {
-      allCities.push(
-        ...viopCities.value.map((city) => ({ 
-          ...city, 
-          provider: 'viop' as const 
-        }))
-      );
-    }
-
+    // Remove duplicatas por código
     const uniqueCities = Array.from(
       new Map(allCities.map((city) => [city.code, city])).values()
     );

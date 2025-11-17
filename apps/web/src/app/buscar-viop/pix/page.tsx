@@ -1,20 +1,20 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import { QrCode, Copy, CheckCircle2, Clock, ArrowLeft, Smartphone } from 'lucide-react';
 
-export default function PixPage() {
+function PixContent() {
   const sp = useSearchParams();
   const router = useRouter();
   const [copied, setCopied] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(1800); // 30 minutos em segundos
+  const [timeLeft, setTimeLeft] = useState(1800);
   const [checking, setChecking] = useState(false);
 
   const orderId = sp.get('order_id');
   const qrCode = sp.get('qr_code');
 
-  // Timer de expiração
   useEffect(() => {
     if (timeLeft <= 0) return;
     
@@ -25,7 +25,6 @@ export default function PixPage() {
     return () => clearInterval(timer);
   }, [timeLeft]);
 
-  // Verificar status do pagamento a cada 5 segundos
   useEffect(() => {
     if (!orderId) return;
 
@@ -47,10 +46,7 @@ export default function PixPage() {
       }
     };
 
-    // Verificar imediatamente
     checkPayment();
-
-    // Depois verificar a cada 5 segundos
     const interval = setInterval(checkPayment, 5000);
     return () => clearInterval(interval);
   }, [orderId, router, checking]);
@@ -88,7 +84,6 @@ export default function PixPage() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 py-10">
       <div className="mx-auto max-w-2xl px-4">
-        {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => router.back()}
@@ -107,7 +102,6 @@ export default function PixPage() {
           </div>
         </div>
 
-        {/* Timer */}
         <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 p-4 mb-6">
           <div className="flex items-center justify-center gap-3">
             <Clock className="w-5 h-5 text-amber-600" />
@@ -118,10 +112,8 @@ export default function PixPage() {
           </div>
         </div>
 
-        {/* QR Code */}
         <div className="rounded-2xl bg-white p-8 shadow-xl border border-slate-200 mb-6">
           <div className="bg-white p-8 rounded-xl border-4 border-slate-100 mb-6 flex items-center justify-center">
-            {/* Aqui você pode usar uma biblioteca para gerar QR Code visual */}
             <div className="w-64 h-64 bg-slate-100 rounded-lg flex items-center justify-center">
               <div className="text-center">
                 <QrCode className="w-32 h-32 text-slate-400 mx-auto mb-4" />
@@ -131,7 +123,6 @@ export default function PixPage() {
             </div>
           </div>
 
-          {/* Pix Copia e Cola */}
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">
               Pix Copia e Cola
@@ -152,13 +143,9 @@ export default function PixPage() {
                 }`}
               >
                 {copied ? (
-                  <>
-                    <CheckCircle2 className="w-5 h-5" />
-                  </>
+                  <CheckCircle2 className="w-5 h-5" />
                 ) : (
-                  <>
-                    <Copy className="w-5 h-5" />
-                  </>
+                  <Copy className="w-5 h-5" />
                 )}
               </button>
             </div>
@@ -170,7 +157,6 @@ export default function PixPage() {
           </div>
         </div>
 
-        {/* Instruções */}
         <div className="rounded-2xl bg-white p-6 shadow-lg border border-slate-200 mb-6">
           <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
             <Smartphone className="w-5 h-5 text-blue-600" />
@@ -220,7 +206,6 @@ export default function PixPage() {
           </ol>
         </div>
 
-        {/* Status de verificação */}
         <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-center">
           <div className="flex items-center justify-center gap-2 text-blue-700">
             <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -231,12 +216,30 @@ export default function PixPage() {
           </p>
         </div>
 
-        {/* Info adicional */}
         <div className="mt-6 text-center text-sm text-slate-500">
           <p>Pedido: {orderId}</p>
           <p className="mt-1">Em caso de dúvidas, entre em contato com nosso suporte</p>
         </div>
       </div>
     </main>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600 font-semibold">Carregando PIX...</p>
+      </div>
+    </main>
+  );
+}
+
+export default function PixPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <PixContent />
+    </Suspense>
   );
 }

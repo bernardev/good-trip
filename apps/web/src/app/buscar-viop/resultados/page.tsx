@@ -1,18 +1,14 @@
-// ============================================
-// PÁGINA DE RESULTADOS
-// apps/web/src/app/buscar-viop/resultados/page.tsx
-// ============================================
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { JSX } from 'react';
 
 // Tipos base
-type ISODate = `${number}-${number}-${number}`; // 'YYYY-MM-DD'
-type HHMM = `${number}:${number}`;              // 'HH:MM'
+type ISODate = `${number}-${number}-${number}`;
+type HHMM = `${number}:${number}`;
 
-// Viagem unificada (mesmo contrato do backend)
 type ViagemUnificada = {
   id: string;
   provider: "ouro-prata" | "distribusion";
@@ -30,12 +26,9 @@ type ViagemUnificada = {
   urlDistribusion?: string;
 };
 
-// Respostas da API
 type ApiOk = { ok: true; total: number; viagens: ViagemUnificada[] };
 type ApiErr = { error: string };
-type ApiResponse = ApiOk | ApiErr;
 
-// Type guards
 function isApiOk(x: unknown): x is ApiOk {
   return (
     typeof x === "object" &&
@@ -45,7 +38,7 @@ function isApiOk(x: unknown): x is ApiOk {
   );
 }
 
-export default function ResultadosPage(): JSX.Element {
+function ResultadosContent(): JSX.Element {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -102,7 +95,6 @@ export default function ResultadosPage(): JSX.Element {
         setViagens([]);
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error("Erro:", err);
       setError("Erro ao buscar viagens. Tente novamente.");
       setViagens([]);
@@ -163,7 +155,6 @@ export default function ResultadosPage(): JSX.Element {
   return (
     <div className="min-h-screen bg-slate-50 p-4">
       <div className="max-w-5xl mx-auto">
-        {/* Header com resumo da busca */}
         <div className="bg-white rounded-xl shadow p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
@@ -185,7 +176,6 @@ export default function ResultadosPage(): JSX.Element {
           </div>
         </div>
 
-        {/* Lista de viagens */}
         {viagens.length === 0 ? (
           <div className="bg-white rounded-xl shadow p-12 text-center">
             <div className="text-slate-400 text-6xl mb-4">🚌</div>
@@ -214,7 +204,6 @@ export default function ResultadosPage(): JSX.Element {
           </div>
         )}
 
-        {/* Legenda */}
         {viagens.length > 0 && (
           <div className="mt-6 bg-white rounded-xl shadow p-4">
             <div className="flex flex-wrap gap-4 text-sm">
@@ -234,9 +223,25 @@ export default function ResultadosPage(): JSX.Element {
   );
 }
 
-// ============================================
-// COMPONENTE DE CARD DA VIAGEM
-// ============================================
+function LoadingFallback(): JSX.Element {
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600 font-semibold">Carregando resultados...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function ResultadosPage(): JSX.Element {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ResultadosContent />
+    </Suspense>
+  );
+}
+
 function CardViagem(props: {
   viagem: ViagemUnificada;
   onSelecionar: (v: ViagemUnificada) => void;
@@ -250,9 +255,7 @@ function CardViagem(props: {
   return (
     <div className="bg-white rounded-xl shadow hover:shadow-lg transition-shadow p-6">
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Info da viagem */}
         <div className="flex-1">
-          {/* Badges */}
           <div className="flex flex-wrap gap-2 mb-4">
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badgeColor}`}>
               {viagem.nomeEmpresa}
@@ -267,7 +270,6 @@ function CardViagem(props: {
             )}
           </div>
 
-          {/* Horários */}
           <div className="flex items-center gap-6 mb-3">
             <div>
               <div className="text-3xl font-bold text-slate-800">{viagem.horarioPartida}</div>
@@ -286,7 +288,6 @@ function CardViagem(props: {
             </div>
           </div>
 
-          {/* Info adicional */}
           {!isDistribusion && viagem.assentosDisponiveis > 0 && (
             <div className="text-sm text-slate-600">
               📍 {viagem.assentosDisponiveis} assentos disponíveis
@@ -294,7 +295,6 @@ function CardViagem(props: {
           )}
         </div>
 
-        {/* Preço e ação */}
         <div className="lg:border-l lg:pl-6 flex flex-col justify-center items-center min-w-[200px]">
           {viagem.preco > 0 ? (
             <>
@@ -332,9 +332,6 @@ function CardViagem(props: {
   );
 }
 
-// ============================================
-// UTILITÁRIOS
-// ============================================
 function formatarData(dataISO: ISODate): string {
   const parts = dataISO.split("-");
   if (parts.length !== 3) return dataISO;

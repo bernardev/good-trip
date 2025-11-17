@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useMemo, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CreditCard, QrCode, Mail, Bus, Clock, Lock, Shield, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -11,7 +12,7 @@ type Query = {
 
 type PaymentMethod = 'credit_card' | 'pix';
 
-export default function PagamentoPage() {
+function PagamentoContent() {
   const sp = useSearchParams();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -41,7 +42,7 @@ export default function PagamentoPage() {
   const title = useMemo(() => {
     const o = q.origem ?? 'Origem';
     const d = q.destino ?? 'Destino';
-    return `Passagem VIOP ${o} → ${d}`;
+    return `Passagem ${o} → ${d}`;
   }, [q.origem, q.destino]);
 
   const total = useMemo<number>(() => {
@@ -49,7 +50,6 @@ export default function PagamentoPage() {
     return Number.isFinite(t) && t > 0 ? t : 89.70;
   }, [sp]);
 
-  // Máscara para número do cartão
   const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\s/g, '');
     if (value.length > 16) value = value.slice(0, 16);
@@ -57,7 +57,6 @@ export default function PagamentoPage() {
     setCardNumber(formatted);
   };
 
-  // Máscara para validade
   const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '');
     if (value.length > 4) value = value.slice(0, 4);
@@ -67,14 +66,12 @@ export default function PagamentoPage() {
     setCardExpiry(value);
   };
 
-  // Máscara para CVV
   const handleCvvChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '');
     if (value.length > 4) value = value.slice(0, 4);
     setCardCvv(value);
   };
 
-  // Detectar bandeira do cartão
   const getCardBrand = useCallback((number: string): string => {
     const cleaned = number.replace(/\s/g, '');
     if (/^4/.test(cleaned)) return 'visa';
@@ -90,7 +87,6 @@ export default function PagamentoPage() {
 
   const cardBrand = useMemo(() => getCardBrand(cardNumber), [cardNumber, getCardBrand]);
 
-  // Calcular parcelas
   const installmentOptions = useMemo(() => {
     const options = [];
     const maxInstallments = 12;
@@ -112,7 +108,6 @@ export default function PagamentoPage() {
 
     try {
       if (paymentMethod === 'credit_card') {
-        // Validações básicas
         if (!cardNumber || !cardName || !cardExpiry || !cardCvv) {
           throw new Error('Preencha todos os dados do cartão');
         }
@@ -122,7 +117,6 @@ export default function PagamentoPage() {
           throw new Error('Número do cartão inválido');
         }
 
-        // Enviar para o backend (modo simulação)
         const response = await fetch('/api/payments/pagarme/process', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -133,7 +127,7 @@ export default function PagamentoPage() {
             card_expiry: cardExpiry,
             card_cvv: cardCvv,
             installments: parseInt(installments),
-            amount: Math.round(total * 100), // converter para centavos
+            amount: Math.round(total * 100),
             customer: {
               name: `${q.nome ?? 'Teste'} ${q.sobrenome ?? 'Usuário'}`,
               email: q.email ?? '[email protected]',
@@ -160,11 +154,9 @@ export default function PagamentoPage() {
           throw new Error(result.message || 'Erro ao processar pagamento');
         }
 
-        // Sucesso! Redirecionar
         router.push(`/buscar-viop/confirmacao?order_id=${result.order_id}&status=paid`);
 
       } else if (paymentMethod === 'pix') {
-        // PIX
         const response = await fetch('/api/payments/pagarme/process', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -197,7 +189,6 @@ export default function PagamentoPage() {
           throw new Error(result.message || 'Erro ao gerar PIX');
         }
 
-        // Redirecionar para página do PIX
         router.push(`/buscar-viop/pix?order_id=${result.order_id}&qr_code=${encodeURIComponent(result.qr_code)}`);
       }
 
@@ -215,7 +206,6 @@ export default function PagamentoPage() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 py-10">
       <div className="mx-auto max-w-6xl px-4">
-        {/* Header com segurança */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-green-100 px-4 py-2 text-sm font-medium text-green-700 mb-4">
             <Shield className="w-4 h-4" />
@@ -226,9 +216,7 @@ export default function PagamentoPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
-          {/* COLUNA ESQUERDA - Métodos de Pagamento */}
           <div className="space-y-6">
-            {/* Seletor de método */}
             <div className="rounded-2xl bg-white p-6 shadow-lg border border-slate-200">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-blue-600" />
@@ -277,7 +265,6 @@ export default function PagamentoPage() {
                 </button>
               </div>
 
-              {/* Formulário de Cartão */}
               {paymentMethod === 'credit_card' && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white shadow-xl">
@@ -379,7 +366,6 @@ export default function PagamentoPage() {
                 </div>
               )}
 
-              {/* Info do PIX */}
               {paymentMethod === 'pix' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 p-6">
@@ -413,7 +399,6 @@ export default function PagamentoPage() {
               )}
             </div>
 
-            {/* Erro */}
             {err && (
               <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 animate-in fade-in slide-in-from-bottom-2">
                 <div className="flex items-start gap-3">
@@ -426,7 +411,6 @@ export default function PagamentoPage() {
               </div>
             )}
 
-            {/* Botão de Pagamento */}
             <button
               onClick={processPayment}
               disabled={loading}
@@ -458,9 +442,7 @@ export default function PagamentoPage() {
             </div>
           </div>
 
-          {/* COLUNA DIREITA - Resumo */}
           <div className="space-y-6">
-            {/* Resumo da viagem */}
             <div className="rounded-2xl bg-white p-6 shadow-lg border border-slate-200 sticky top-6">
               <h3 className="font-bold text-lg mb-4">Resumo da Compra</h3>
               
@@ -514,7 +496,6 @@ export default function PagamentoPage() {
               )}
             </div>
 
-            {/* Selo de segurança */}
             <div className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 p-4">
               <div className="flex items-center gap-3 mb-3">
                 <div className="rounded-full bg-green-500 p-2">
@@ -538,7 +519,6 @@ export default function PagamentoPage() {
               </ul>
             </div>
 
-            {/* Timer */}
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3">
               <Clock className="w-5 h-5 text-amber-600" />
               <div>
@@ -550,5 +530,24 @@ export default function PagamentoPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600 font-semibold">Carregando pagamento...</p>
+      </div>
+    </main>
+  );
+}
+
+export default function PagamentoPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <PagamentoContent />
+    </Suspense>
   );
 }

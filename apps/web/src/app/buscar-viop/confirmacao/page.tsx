@@ -2,11 +2,12 @@
 
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2 } from 'lucide-react';
+import { Suspense } from 'react';
 
-export default function ConfirmacaoPage() {
+function ConfirmacaoContent() {
   const sp = useSearchParams();
   const paymentId = sp.get('payment_id');
-  const status = sp.get('status'); // approved | pending | failure (quando auto_return não é approved)
+  const status = sp.get('status');
   const preferenceId = sp.get('preference_id');
 
   return (
@@ -26,5 +27,26 @@ export default function ConfirmacaoPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <main className="min-h-screen bg-slate-50 py-10">
+      <div className="mx-auto max-w-2xl px-4">
+        <div className="rounded-2xl bg-white border p-8 text-center">
+          <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <h1 className="text-2xl font-bold mb-1">Carregando...</h1>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function ConfirmacaoPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ConfirmacaoContent />
+    </Suspense>
   );
 }

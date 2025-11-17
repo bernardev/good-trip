@@ -1,0 +1,359 @@
+// viop-adapter.ts
+import {
+  UnifiedTrip,
+  ViopCity,
+  ViopCitiesResponse,
+  ViopTrip,
+} from '../types/unified-trip';
+
+/** -------- Tipos da resposta de /api/viop/corridas -------- */
+interface ViopCorridaSimples {
+  id: string;
+  origem: string;
+  destino: string;
+  dataPartida: string;    // YYYY-MM-DD
+  horarioPartida: string; // HH:MM
+  horarioChegada: string; // HH:MM
+  duracao: string;        // ex: "8h 30min"
+  preco: number;
+  assentosDisponiveis: number;
+  tipo: string;
+  nomeEmpresa: string;
+  servico?: string;       // opcional; quando presente, é o ID do serviço
+}
+
+interface ViopCorridasResponse {
+  total: number;
+  corridas: ViopCorridaSimples[];
+}
+
+/** -------- Tipos da resposta de /api/viop/onibus -------- */
+interface ViopServiceMeta {
+  servico?: string;
+  preco?: number;
+  precoOriginal?: number;
+  tarifa?: number;
+  classe?: string;
+  empresa?: string;
+  empresaId?: number;
+  poltronasTotal?: number;
+  poltronasLivres?: number;
+  dataCorrida?: string; // YYYY-MM-DD
+  saida?: string;       // HH:MM
+  chegada?: string;     // HH:MM
+}
+
+interface ViopSeatsInfo {
+  origem?: { cidade?: string; id?: number };
+  destino?: { cidade?: string; id?: number };
+}
+
+interface ViopOnibusResponse {
+  ok: boolean;
+  usedBody?: {
+    servico?: string;
+    origem?: string;
+    destino?: string;
+    data?: string;
+  };
+  serviceMeta?: ViopServiceMeta;
+  seats?: ViopSeatsInfo;
+}
+
+/**
+ * Adapter para a API da VIOP
+ */
+export class ViopAdapter {
+  /** Base URL para rodar no server (SSR) e no client sem quebrar */
+  private getBaseUrl(): string {
+    if (typeof window === 'undefined') {
+      return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    }
+    return window.location.origin;
+  }
+
+  /**
+   * Busca viagens na API da VIOP
+   */
+  async searchTrips(params: {
+    departureCity: string;   // origemId (ex: "3603")
+    arrivalCity: string;     // destinoId (ex: "10089")
+    departureDate: string;   // YYYY-MM-DD
+    passengers: number;
+  }): Promise<UnifiedTrip[]> {
+    try {
+      console.log('🔍 [VIOP] Buscando:', params);
+
+      const baseUrl = this.getBaseUrl();
+
+      // 1) Corridas (lista de serviços)
+      const corridasUrl =
+        `${baseUrl}/api/viop/corridas?origemId=${encodeURIComponent(params.departureCity)}` +
+        `&destinoId=${encodeURIComponent(params.arrivalCity)}&data=${params.departureDate}`;
+
+      console.log('🔗 [VIOP] Buscando corridas:', corridasUrl);
+
+      const corridasResponse = await fetch(corridasUrl, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+      });
+
+      if (!corridasResponse.ok) {
+        throw new Error(`Erro na API VIOP corridas: ${corridasResponse.status}`);
+      }
+
+      const corridasData: ViopCorridasResponse = await corridasResponse.json();
+      console.log('📦 [VIOP] Corridas encontradas:', corridasData.total);
+
+      const lista = corridasData.corridas ?? [];
+      if (lista.length === 0) {
+        console.log('⚠️ [VIOP] Nenhuma corrida encontrada');
+        return [];
+      }
+
+      // 2) Para cada corrida, buscar detalhes (onibus) pelo serviço
+      const tripsPromises = lista.map(async (corrida) => {
+        const servicoId = corrida.servico || this.extractServicoFromCorridaId(corrida.id) || corrida.id;
+
+        const onibusUrl =
+          `${baseUrl}/api/viop/onibus?origemId=${encodeURIComponent(params.departureCity)}` +
+          `&destinoId=${encodeURIComponent(params.arrivalCity)}` +
+          `&data=${params.departureDate}&servico=${encodeURIComponent(servicoId)}`;
+
+        console.log('🔗 [VIOP] Buscando detalhes:', onibusUrl);
+
+        try {
+          const onibusResponse = await fetch(onibusUrl, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+          });
+
+          if (!onibusResponse.ok) {
+            console.warn(`⚠️ [VIOP] Erro ao buscar serviço ${servicoId}: ${onibusResponse.status}`);
+            return null;
+          }
+
+          const onibusData: ViopOnibusResponse = await onibusResponse.json();
+
+          if (!onibusData.ok || !onibusData.serviceMeta) {
+            console.warn(`⚠️ [VIOP] Dados inválidos para serviço ${servicoId}`);
+            return null;
+          }
+
+          // Normaliza já com os IDs necessários para booking/assentos
+          return this.normalizeTrip(
+            corrida,
+            onibusData,
+            params.departureCity,
+            params.arrivalCity,
+            params.departureDate,
+            servicoId
+          );
+        } catch (err) {
+          console.error(`❌ [VIOP] Erro ao buscar serviço ${servicoId}:`, err);
+          return null;
+        }
+      });
+
+      const trips = (await Promise.all(tripsPromises)).filter(
+        (t): t is UnifiedTrip => t !== null
+      );
+
+      console.log(`✅ [VIOP] ${trips.length} viagens processadas com sucesso`);
+      return trips;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error('❌ [VIOP] Erro:', msg);
+      return [];
+    }
+  }
+
+  /**
+   * Tenta extrair o ID do serviço a partir de um ID composto de corrida
+   * Formatos possíveis variam; mantemos simples e seguro.
+   */
+  private extractServicoFromCorridaId(id: string): string {
+    // Se houver hífen e o padrão "SERVICO-XXXX", prioriza a primeira parte;
+    // caso contrário, retornamos string vazia para o chamador decidir o fallback.
+    const parts = id.split('-');
+    return parts.length > 0 ? parts[0] : '';
+  }
+
+  /**
+   * Converte dados da VIOP para formato unificado
+   */
+  private normalizeTrip(
+    corrida: ViopCorridaSimples,
+    onibusData: ViopOnibusResponse,
+    origemId: string,
+    destinoId: string,
+    dataBusca: string,    // YYYY-MM-DD
+    servicoId: string
+  ): UnifiedTrip {
+    const meta = onibusData.serviceMeta!;
+    const seats = onibusData.seats;
+
+    // Campos base (preferimos dados “vivos” do /onibus)
+    const origemNome = seats?.origem?.cidade || corrida.origem;
+    const destinoNome = seats?.destino?.cidade || corrida.destino;
+    const preco = this.safeNumber(meta.preco, corrida.preco);
+    const assentos = this.safeNumber(meta.poltronasLivres, corrida.assentosDisponiveis);
+    const classe = meta.classe || corrida.tipo;
+    const empresa = meta.empresa || corrida.nomeEmpresa;
+    const saida = meta.saida || corrida.horarioPartida;
+    const chegada = meta.chegada || corrida.horarioChegada;
+
+    // Datas/hora ISO
+    const departureTime = this.combineDateTime(corrida.dataPartida || dataBusca, saida);
+    const arrivalTime = this.combineDateTime(corrida.dataPartida || dataBusca, chegada);
+
+    // Duração em minutos
+    const duracaoMin = corrida.duracao
+      ? this.parseDurationToMinutes(corrida.duracao)
+      : this.calculateDurationFromTimes(saida, chegada);
+
+    // Dados brutos (ViopTrip) para debugging ou downstream
+    const viopTrip: ViopTrip = {
+      id: corrida.id,
+      origem: origemNome,
+      destino: destinoNome,
+      dataHoraSaida: departureTime,
+      dataHoraChegada: arrivalTime,
+      duracao: duracaoMin,
+      empresa,
+      valor: preco,
+      poltronasDisponiveis: assentos,
+      tipoOnibus: classe,
+      servicos: [],
+    };
+
+    // URL correta para fluxo VIOP: página de assentos
+    const bookingParams = new URLSearchParams({
+      servico: servicoId,
+      origem: origemId,
+      destino: destinoId,
+      data: dataBusca,
+    });
+
+    return {
+      id: `viop-${corrida.id}`,
+      provider: 'viop',
+
+      departureCity: origemNome,
+      departureCityCode: origemId,
+      arrivalCity: destinoNome,
+      arrivalCityCode: destinoId,
+
+      departureTime,
+      arrivalTime,
+      duration: duracaoMin,
+
+      carrier: empresa || 'Viação Ouro e Prata',
+      carrierLogo: '/logos/viop-logo.png',
+
+      price: preco,
+      currency: 'BRL',
+
+      availableSeats: assentos,
+      busType: classe,
+      amenities: [],
+
+      bookingUrl: `/buscar-viop/assentos?${bookingParams.toString()}`,
+      rawData: viopTrip,
+    };
+  }
+
+  /** Helpers */
+
+  private safeNumber(primary?: number, fallback?: number): number {
+    const p = typeof primary === 'number' && !Number.isNaN(primary) ? primary : undefined;
+    const f = typeof fallback === 'number' && !Number.isNaN(fallback) ? fallback : undefined;
+    return (p ?? f ?? 0);
+  }
+
+  private combineDateTime(date: string, time: string): string {
+    if (!date || !time || time === '--:--') {
+      return new Date().toISOString();
+    }
+    const hhmm = time.length > 5 ? time.slice(0, 5) : time; // normaliza "HH:MM"
+    // Mantém como UTC ISO simples; ajuste de timezone/fuso pode ser feito onde renderizar
+    return `${date}T${hhmm}:00.000Z`;
+    // Alternativa local-aware (se for necessário no futuro):
+    // const [h, m] = hhmm.split(':').map(Number);
+    // const d = new Date(date + 'T00:00:00');
+    // d.setHours(h, m, 0, 0);
+    // return d.toISOString();
+  }
+
+  /**
+   * Calcula duração em minutos a partir de horários HH:MM
+   */
+  private calculateDurationFromTimes(saida: string, chegada: string): number {
+    if (!saida || !chegada || saida === '--:--' || chegada === '--:--') {
+      return 0;
+    }
+    const [sh, sm] = saídaEMinutos(saida);
+    const [ch, cm] = saídaEMinutos(chegada);
+
+    if (sh === null || sm === null || ch === null || cm === null) return 0;
+
+    let total = ch * 60 + cm - (sh * 60 + sm);
+    if (total < 0) total += 24 * 60; // passou da meia-noite
+    return total;
+
+    function saídaEMinutos(hhmm: string): [number | null, number | null] {
+      const [h, m] = hhmm.split(':').map((v) => Number(v));
+      if (Number.isNaN(h) || Number.isNaN(m)) return [null, null];
+      return [h, m];
+    }
+  }
+
+  /**
+   * Converte "Xh Ymin" -> minutos
+   */
+  private parseDurationToMinutes(duracao: string | undefined): number {
+    if (!duracao) return 0;
+    const hMatch = duracao.match(/(\d+)h/);
+    const mMatch = duracao.match(/(\d+)min/);
+    const h = hMatch ? parseInt(hMatch[1], 10) : 0;
+    const m = mMatch ? parseInt(mMatch[1], 10) : 0;
+    return h * 60 + m;
+  }
+
+  /** -------- Autocomplete -------- */
+
+  async searchCities(query: string): Promise<ViopCity[]> {
+    try {
+      const baseUrl = this.getBaseUrl();
+      const res = await fetch(`${baseUrl}/api/viop/origens?q=${encodeURIComponent(query)}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error(`Erro na API: ${res.status}`);
+      const data: ViopCitiesResponse = await res.json();
+      return data.ok ? (data.items ?? []) : [];
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error('Erro ao buscar cidades VIOP:', msg);
+      return [];
+    }
+  }
+
+  async searchDestinations(origemId: string, query: string): Promise<ViopCity[]> {
+    try {
+      const baseUrl = this.getBaseUrl();
+      const url =
+        `${baseUrl}/api/viop/destinos?origemId=${encodeURIComponent(origemId)}` +
+        `&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Erro na API: ${res.status}`);
+      const data: ViopCitiesResponse = await res.json();
+      return data.ok ? (data.items ?? []) : [];
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error('Erro ao buscar destinos VIOP:', msg);
+      return [];
+    }
+  }
+}

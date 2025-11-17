@@ -5,6 +5,7 @@ import HowItWorks from "@/components/how/HowItWorks";
 import PartnersMarquee from "@/components/partners/PartnersMarquee";
 import DestinationsGrid from "@/components/destinations/DestinationsGrid";
 import WhatsAppButton from "@/components/commom/WhatsAppButton";
+import HomeSearchWidget from "@/components/search/HomeSearchWidget";
 
 
 export default function Page() {
@@ -16,6 +17,7 @@ export default function Page() {
       <HowItWorks />
       <PartnersMarquee />
       <AboutCallout />
+      <HomeSearchWidget />
 
       {/* Botão flutuante WhatsApp */}
       <div className="fixed right-4 bottom-4 z-50">

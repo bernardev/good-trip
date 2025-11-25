@@ -144,6 +144,14 @@ const MOCK = FORCE_MOCK || !BASE || !TENANT || !USER || !PASS;
 const AUTH =
   USER && PASS ? "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64") : "";
 
+// 🔍 DEBUG TEMPORÁRIO - adicione isso logo após a linha do AUTH
+console.log("🔐 AUTH DEBUG:", {
+  USER_LENGTH: USER.length,
+  PASS_LENGTH: PASS.length,
+  AUTH_COMPLETO: AUTH, // ⚠️ CUIDADO: vai expor credenciais no log
+  BASE64_PART: AUTH.replace("Basic ", ""),
+});
+
 // ====== Low-level fetcher (genérico) ======
 async function viopFetch<T>(
   path: string,

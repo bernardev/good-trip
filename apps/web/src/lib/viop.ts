@@ -158,7 +158,29 @@ async function viopFetch<T>(
   method: "GET" | "POST" = "GET",
   body?: unknown
 ): Promise<T> {
+  // 🔥 LOG ANTES DE TUDO
+  console.error("=".repeat(50));
+  console.error("🚀 VIOP FETCH INICIANDO");
+  console.error("=".repeat(50));
+  
   const url = `${BASE}${path}`;
+  
+  const logData = {
+    timestamp: new Date().toISOString(),
+    url,
+    method,
+    path,
+    BASE,
+    TENANT,
+    hasAuth: !!AUTH,
+    authLength: AUTH?.length || 0,
+    authPreview: AUTH ? `Bearer ${AUTH.substring(7, 27)}...` : 'NENHUM AUTH',
+    env: process.env.NODE_ENV,
+  };
+  
+  // Usar console.error porque ele SEMPRE aparece no Vercel
+  console.error("📡 VIOP REQUEST:", JSON.stringify(logData, null, 2));
+  
   const headers = {
     "content-type": "application/json",
     "x-tenant-id": TENANT,
@@ -166,39 +188,46 @@ async function viopFetch<T>(
     ...(AUTH ? { authorization: AUTH } : {}),
   };
 
-  // 🔍 LOG COMPLETO
-  console.log("📡 VIOP FETCH:", {
-    url,
-    method,
-    tenant: TENANT,
-    hasAuth: !!AUTH,
-    authLength: AUTH.length,
-    env: process.env.NODE_ENV,
-  });
+  console.error("📋 HEADERS:", JSON.stringify(headers, null, 2));
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-    next: { revalidate: 0 },
-  });
-
-  console.log("📡 VIOP RESPONSE:", {
-    status: res.status,
-    ok: res.ok,
-    headers: Object.fromEntries(res.headers.entries()),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    console.error("❌ VIOP ERROR:", {
-      status: res.status,
-      text: text.substring(0, 500),
+  try {
+    console.error("⏳ Fazendo fetch...");
+    
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+      next: { revalidate: 0 },
     });
-    throw new Error(`VIOP ${method} ${path} -> ${res.status} ${text}`);
+
+    console.error("✅ Fetch concluído!");
+    
+    const responseData = {
+      status: res.status,
+      ok: res.ok,
+      statusText: res.statusText,
+    };
+    
+    console.error("📥 VIOP RESPONSE:", JSON.stringify(responseData, null, 2));
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("❌ ERRO NA RESPOSTA:");
+      console.error("Status:", res.status);
+      console.error("Texto:", text.substring(0, 500));
+      throw new Error(`VIOP ${method} ${path} -> ${res.status}`);
+    }
+    
+    const json = await res.json();
+    console.error("✅ JSON parseado com sucesso");
+    return json as T;
+    
+  } catch (error) {
+    console.error("💥 EXCEÇÃO CAPTURADA:");
+    console.error(error);
+    throw error;
   }
-  return (await res.json()) as T;
 }
 
 // ====== Endpoints (paths reais + placeholders) ======

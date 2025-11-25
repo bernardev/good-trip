@@ -163,6 +163,7 @@ async function viopFetch<T>(
     headers: {
       "content-type": "application/json",
       "x-tenant-id": TENANT,
+      "user-agent": "GoodTrip/1.0", // 👈 ADICIONE ISSO
       ...(AUTH ? { authorization: AUTH } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,

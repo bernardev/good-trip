@@ -141,87 +141,17 @@ const PASS = process.env.VIOP_PASS ?? "";
 const FORCE_MOCK = process.env.VIOP_FORCE_MOCK === "1";
 const MOCK = FORCE_MOCK || !BASE || !TENANT || !USER || !PASS;
 
-// ====== GERENCIAMENTO DE TOKEN ======
-let TOKEN: string | null = null;
-let TOKEN_EXPIRY: number = 0;
+// 🔥 BASIC AUTH - IGUAL AO POSTMAN
+const AUTH = USER && PASS 
+  ? "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64") 
+  : "";
 
-// Função para fazer login e obter o token Bearer
-async function getToken(): Promise<string> {
-  const now = Date.now();
-  
-  // Se tem token válido em cache, retorna
-  if (TOKEN && TOKEN_EXPIRY > now) {
-    console.error("♻️ Usando token em cache");
-    return TOKEN;
-  }
-
-  console.error("🔐 Fazendo login na API VIOP...");
-  console.error("📧 User:", USER);
-  console.error("🔑 Pass length:", PASS.length);
-  console.error("🏢 Tenant:", TENANT);
-  console.error("🌐 Base URL:", BASE);
-  
-  const loginPayload = {
-    login: USER,
-    senha: PASS,
-  };
-  
-  console.error("📦 Login payload:", JSON.stringify(loginPayload, null, 2));
-  
-  try {
-    const loginUrl = `${BASE}/usuario/autenticar`;
-    console.error("🎯 Login URL:", loginUrl);
-    
-    const res = await fetch(loginUrl, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-tenant-id": TENANT,
-      },
-      body: JSON.stringify(loginPayload),
-      cache: "no-store",
-    });
-
-    console.error("📥 Login response status:", res.status);
-    console.error("📥 Login response statusText:", res.statusText);
-    console.error("📥 Login response headers:", JSON.stringify(Object.fromEntries(res.headers.entries()), null, 2));
-
-    const responseText = await res.text();
-    console.error("📄 Login response body:", responseText);
-
-    if (!res.ok) {
-      console.error("❌ Erro no login - Status:", res.status);
-      console.error("❌ Response completa:", responseText);
-      throw new Error(`Login falhou: ${res.status} - ${responseText}`);
-    }
-
-    let data;
-    try {
-      data = JSON.parse(responseText);
-      console.error("✅ Login data parsed:", JSON.stringify(data, null, 2));
-    } catch (e) {
-      console.error("❌ Erro ao fazer parse do JSON:", e);
-      throw new Error("Resposta do login não é JSON válido");
-    }
-    
-    // A resposta pode ter diferentes formatos, ajuste conforme necessário
-    TOKEN = data.token || data.access_token || data.accessToken || data.jwt;
-    
-    if (!TOKEN) {
-      console.error("❌ Token não encontrado na resposta. Campos disponíveis:", Object.keys(data));
-      throw new Error("Token não retornado pela API");
-    }
-    
-    TOKEN_EXPIRY = now + 50 * 60 * 1000; // Token válido por 50 minutos
-    
-    console.error("✅ Login realizado! Token obtido:", TOKEN.substring(0, 30) + "...");
-    return TOKEN;
-    
-  } catch (error) {
-    console.error("💥 Erro ao fazer login:", error);
-    throw error;
-  }
-}
+console.error("🔐 AUTH DEBUG:", {
+  USER,
+  PASS_LENGTH: PASS.length,
+  AUTH_COMPLETO: AUTH,
+  BASE64_DECODED: AUTH ? Buffer.from(AUTH.replace("Basic ", ""), "base64").toString() : "",
+});
 
 // ====== Low-level fetcher (genérico) ======
 async function viopFetch<T>(
@@ -230,42 +160,27 @@ async function viopFetch<T>(
   body?: unknown
 ): Promise<T> {
   console.error("=".repeat(50));
-  console.error("🚀 VIOP FETCH INICIANDO");
+  console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
-  
-  // 🎯 OBTER TOKEN BEARER ANTES DE FAZER A REQUISIÇÃO
-  const token = await getToken();
   
   const url = `${BASE}${path}`;
   
-  const logData = {
-    timestamp: new Date().toISOString(),
-    url,
-    method,
-    path,
-    BASE,
-    TENANT,
-    hasToken: !!token,
-    tokenLength: token?.length || 0,
-    tokenPreview: token ? `${token.substring(0, 20)}...` : 'NENHUM TOKEN',
-    env: process.env.NODE_ENV,
-  };
-  
-  console.error("📡 VIOP REQUEST:", JSON.stringify(logData, null, 2));
-  
-  // 🎯 USAR BEARER TOKEN NOS HEADERS
+  // 🎯 USAR BASIC AUTH - IGUAL AO POSTMAN
   const headers = {
     "content-type": "application/json",
     "x-tenant-id": TENANT,
     "user-agent": "GoodTrip/1.0",
-    "authorization": `Bearer ${token}`, // 🔥 BEARER TOKEN AQUI
+    "authorization": AUTH, // Basic Auth aqui!
   };
 
-  console.error("📋 HEADERS:", JSON.stringify(headers, null, 2));
+  console.error("📡 REQUEST:", {
+    url,
+    method,
+    headers,
+    body: body ? JSON.stringify(body).substring(0, 200) : undefined,
+  });
 
   try {
-    console.error("⏳ Fazendo fetch...");
-    
     const res = await fetch(url, {
       method,
       headers,
@@ -274,41 +189,24 @@ async function viopFetch<T>(
       next: { revalidate: 0 },
     });
 
-    console.error("✅ Fetch concluído!");
-    
-    const responseData = {
+    console.error("📥 RESPONSE:", {
       status: res.status,
       ok: res.ok,
       statusText: res.statusText,
-    };
-    
-    console.error("📥 VIOP RESPONSE:", JSON.stringify(responseData, null, 2));
+    });
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      console.error("❌ ERRO NA RESPOSTA:");
-      console.error("Status:", res.status);
-      console.error("Texto:", text.substring(0, 500));
-      
-      // 🔄 Se for erro de autenticação, limpar token e tentar novamente
-      if (res.status === 401 || res.status === 403) {
-        console.error("🔄 Token expirado/inválido, limpando cache e tentando novamente...");
-        TOKEN = null;
-        TOKEN_EXPIRY = 0;
-        // Tenta uma única vez novamente
-        return viopFetch(path, method, body);
-      }
-      
+      console.error("❌ ERRO:", text.substring(0, 500));
       throw new Error(`VIOP ${method} ${path} -> ${res.status} ${text}`);
     }
     
     const json = await res.json();
-    console.error("✅ JSON parseado com sucesso");
+    console.error("✅ Sucesso!");
     return json as T;
     
   } catch (error) {
-    console.error("💥 EXCEÇÃO CAPTURADA:");
-    console.error(error);
+    console.error("💥 EXCEÇÃO:", error);
     throw error;
   }
 }
@@ -572,13 +470,12 @@ export const Viop = {
       data: ymd,
     };
 
-    const token = await getToken();
     const res = await fetch(`${BASE}${Path.consultacorrida.buscar()}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         "x-tenant-id": TENANT,
-        "authorization": `Bearer ${token}`,
+        "authorization": AUTH,
       },
       body: JSON.stringify(body),
       cache: "no-store",

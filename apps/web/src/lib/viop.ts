@@ -158,21 +158,44 @@ async function viopFetch<T>(
   method: "GET" | "POST" = "GET",
   body?: unknown
 ): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const url = `${BASE}${path}`;
+  const headers = {
+    "content-type": "application/json",
+    "x-tenant-id": TENANT,
+    "user-agent": "GoodTrip/1.0",
+    ...(AUTH ? { authorization: AUTH } : {}),
+  };
+
+  // 🔍 LOG COMPLETO
+  console.log("📡 VIOP FETCH:", {
+    url,
     method,
-    headers: {
-      "content-type": "application/json",
-      "x-tenant-id": TENANT,
-      "user-agent": "GoodTrip/1.0", // 👈 ADICIONE ISSO
-      ...(AUTH ? { authorization: AUTH } : {}),
-    },
+    tenant: TENANT,
+    hasAuth: !!AUTH,
+    authLength: AUTH.length,
+    env: process.env.NODE_ENV,
+  });
+
+  const res = await fetch(url, {
+    method,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
     next: { revalidate: 0 },
   });
 
+  console.log("📡 VIOP RESPONSE:", {
+    status: res.status,
+    ok: res.ok,
+    headers: Object.fromEntries(res.headers.entries()),
+  });
+
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    console.error("❌ VIOP ERROR:", {
+      status: res.status,
+      text: text.substring(0, 500),
+    });
     throw new Error(`VIOP ${method} ${path} -> ${res.status} ${text}`);
   }
   return (await res.json()) as T;

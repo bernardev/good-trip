@@ -141,16 +141,66 @@ const PASS = process.env.VIOP_PASS ?? "";
 const FORCE_MOCK = process.env.VIOP_FORCE_MOCK === "1";
 const MOCK = FORCE_MOCK || !BASE || !TENANT || !USER || !PASS;
 
-const AUTH =
-  USER && PASS ? "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64") : "";
+// ====== GERENCIAMENTO DE TOKEN ======
+let TOKEN: string | null = null;
+let TOKEN_EXPIRY: number = 0;
 
-// 🔍 DEBUG TEMPORÁRIO - adicione isso logo após a linha do AUTH
-console.log("🔐 AUTH DEBUG:", {
-  USER_LENGTH: USER.length,
-  PASS_LENGTH: PASS.length,
-  AUTH_COMPLETO: AUTH, // ⚠️ CUIDADO: vai expor credenciais no log
-  BASE64_PART: AUTH.replace("Basic ", ""),
-});
+// Função para fazer login e obter o token Bearer
+async function getToken(): Promise<string> {
+  const now = Date.now();
+  
+  // Se tem token válido em cache, retorna
+  if (TOKEN && TOKEN_EXPIRY > now) {
+    console.error("♻️ Usando token em cache");
+    return TOKEN;
+  }
+
+  console.error("🔐 Fazendo login na API VIOP...");
+  console.error("📧 User:", USER);
+  
+  try {
+    const res = await fetch(`${BASE}/usuario/autenticar`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-tenant-id": TENANT,
+      },
+      body: JSON.stringify({
+        login: USER,
+        senha: PASS,
+      }),
+      cache: "no-store",
+    });
+
+    console.error("📥 Login response:", res.status, res.statusText);
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("❌ Erro no login:", text);
+      throw new Error(`Login falhou: ${res.status} - ${text}`);
+    }
+
+    const data = await res.json();
+    console.error("✅ Login data:", JSON.stringify(data, null, 2));
+    
+    // A resposta pode ter diferentes formatos, ajuste conforme necessário
+    TOKEN = data.token || data.access_token || data.accessToken;
+    
+    if (!TOKEN) {
+      console.error("❌ Token não encontrado na resposta:", data);
+      throw new Error("Token não retornado pela API");
+    }
+    
+    TOKEN_EXPIRY = now + 50 * 60 * 1000; // Token válido por 50 minutos
+    
+    console.error("✅ Login realizado! Token obtido");
+    return TOKEN;
+    
+  } catch (error) {
+    console.error("💥 Erro ao fazer login:", error);
+    throw error;
+  }
+}
 
 // ====== Low-level fetcher (genérico) ======
 async function viopFetch<T>(
@@ -158,10 +208,12 @@ async function viopFetch<T>(
   method: "GET" | "POST" = "GET",
   body?: unknown
 ): Promise<T> {
-  // 🔥 LOG ANTES DE TUDO
   console.error("=".repeat(50));
   console.error("🚀 VIOP FETCH INICIANDO");
   console.error("=".repeat(50));
+  
+  // 🎯 OBTER TOKEN BEARER ANTES DE FAZER A REQUISIÇÃO
+  const token = await getToken();
   
   const url = `${BASE}${path}`;
   
@@ -172,20 +224,20 @@ async function viopFetch<T>(
     path,
     BASE,
     TENANT,
-    hasAuth: !!AUTH,
-    authLength: AUTH?.length || 0,
-    authPreview: AUTH ? `Bearer ${AUTH.substring(7, 27)}...` : 'NENHUM AUTH',
+    hasToken: !!token,
+    tokenLength: token?.length || 0,
+    tokenPreview: token ? `${token.substring(0, 20)}...` : 'NENHUM TOKEN',
     env: process.env.NODE_ENV,
   };
   
-  // Usar console.error porque ele SEMPRE aparece no Vercel
   console.error("📡 VIOP REQUEST:", JSON.stringify(logData, null, 2));
   
+  // 🎯 USAR BEARER TOKEN NOS HEADERS
   const headers = {
     "content-type": "application/json",
     "x-tenant-id": TENANT,
     "user-agent": "GoodTrip/1.0",
-    ...(AUTH ? { authorization: AUTH } : {}),
+    "authorization": `Bearer ${token}`, // 🔥 BEARER TOKEN AQUI
   };
 
   console.error("📋 HEADERS:", JSON.stringify(headers, null, 2));
@@ -216,7 +268,17 @@ async function viopFetch<T>(
       console.error("❌ ERRO NA RESPOSTA:");
       console.error("Status:", res.status);
       console.error("Texto:", text.substring(0, 500));
-      throw new Error(`VIOP ${method} ${path} -> ${res.status}`);
+      
+      // 🔄 Se for erro de autenticação, limpar token e tentar novamente
+      if (res.status === 401 || res.status === 403) {
+        console.error("🔄 Token expirado/inválido, limpando cache e tentando novamente...");
+        TOKEN = null;
+        TOKEN_EXPIRY = 0;
+        // Tenta uma única vez novamente
+        return viopFetch(path, method, body);
+      }
+      
+      throw new Error(`VIOP ${method} ${path} -> ${res.status} ${text}`);
     }
     
     const json = await res.json();
@@ -489,12 +551,13 @@ export const Viop = {
       data: ymd,
     };
 
+    const token = await getToken();
     const res = await fetch(`${BASE}${Path.consultacorrida.buscar()}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         "x-tenant-id": TENANT,
-        ...(AUTH ? { authorization: AUTH } : {}),
+        "authorization": `Bearer ${token}`,
       },
       body: JSON.stringify(body),
       cache: "no-store",

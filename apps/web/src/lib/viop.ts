@@ -43,7 +43,7 @@ export type ConfirmarVendaRes = {
   total: number;
 };
 
-// ====== Tipos “RJ” (respostas brutas da API do parceiro) ======
+// ====== Tipos "RJ" (respostas brutas da API do parceiro) ======
 type RjLocalidade = {
   id: number;
   cidade: string;
@@ -157,43 +157,64 @@ async function getToken(): Promise<string> {
 
   console.error("🔐 Fazendo login na API VIOP...");
   console.error("📧 User:", USER);
+  console.error("🔑 Pass length:", PASS.length);
+  console.error("🏢 Tenant:", TENANT);
+  console.error("🌐 Base URL:", BASE);
+  
+  const loginPayload = {
+    login: USER,
+    senha: PASS,
+  };
+  
+  console.error("📦 Login payload:", JSON.stringify(loginPayload, null, 2));
   
   try {
-    const res = await fetch(`${BASE}/usuario/autenticar`, {
+    const loginUrl = `${BASE}/usuario/autenticar`;
+    console.error("🎯 Login URL:", loginUrl);
+    
+    const res = await fetch(loginUrl, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         "x-tenant-id": TENANT,
       },
-      body: JSON.stringify({
-        login: USER,
-        senha: PASS,
-      }),
+      body: JSON.stringify(loginPayload),
       cache: "no-store",
     });
 
-    console.error("📥 Login response:", res.status, res.statusText);
+    console.error("📥 Login response status:", res.status);
+    console.error("📥 Login response statusText:", res.statusText);
+    console.error("📥 Login response headers:", JSON.stringify(Object.fromEntries(res.headers.entries()), null, 2));
+
+    const responseText = await res.text();
+    console.error("📄 Login response body:", responseText);
 
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error("❌ Erro no login:", text);
-      throw new Error(`Login falhou: ${res.status} - ${text}`);
+      console.error("❌ Erro no login - Status:", res.status);
+      console.error("❌ Response completa:", responseText);
+      throw new Error(`Login falhou: ${res.status} - ${responseText}`);
     }
 
-    const data = await res.json();
-    console.error("✅ Login data:", JSON.stringify(data, null, 2));
+    let data;
+    try {
+      data = JSON.parse(responseText);
+      console.error("✅ Login data parsed:", JSON.stringify(data, null, 2));
+    } catch (e) {
+      console.error("❌ Erro ao fazer parse do JSON:", e);
+      throw new Error("Resposta do login não é JSON válido");
+    }
     
     // A resposta pode ter diferentes formatos, ajuste conforme necessário
-    TOKEN = data.token || data.access_token || data.accessToken;
+    TOKEN = data.token || data.access_token || data.accessToken || data.jwt;
     
     if (!TOKEN) {
-      console.error("❌ Token não encontrado na resposta:", data);
+      console.error("❌ Token não encontrado na resposta. Campos disponíveis:", Object.keys(data));
       throw new Error("Token não retornado pela API");
     }
     
     TOKEN_EXPIRY = now + 50 * 60 * 1000; // Token válido por 50 minutos
     
-    console.error("✅ Login realizado! Token obtido");
+    console.error("✅ Login realizado! Token obtido:", TOKEN.substring(0, 30) + "...");
     return TOKEN;
     
   } catch (error) {

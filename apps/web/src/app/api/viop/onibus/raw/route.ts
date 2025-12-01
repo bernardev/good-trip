@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BASE   = process.env.VIOP_BASE_URL!;
-const TENANT = process.env.VIOP_TENANT_ID!;
-const USER   = process.env.VIOP_USER!;
-const PASS   = process.env.VIOP_PASS!;
+// ===== SEM .env → tudo direto no arquivo =====
+const PROXY = "https://goodtrip.com.br/proxy-viop.php"; // PHP no public_html
+
+const BASE   = `${PROXY}?path=`;            // endpoint base via proxy
+const TENANT = "36906f34-b731-4c28-954e-3c514152de9f";
+const USER   = "GOODTRIPAPI";
+const PASS   = "@g1t2#";
 const AUTH   = "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64");
 
-// ===== Tipos mínimos para leitura segura =====
+// ===== Tipos mínimos =====
 type RjServicoMinimal = {
   idServico?: string | number;
   idViagem?: string | number;
@@ -26,14 +29,12 @@ type RjBuscaCorridaEnvelope = {
   lsServicos: RjServicoMinimal[];
 };
 
-// ===== Utils/guards =====
+// ===== Utils =====
 function isObject(u: unknown): u is Record<string, unknown> {
   return typeof u === "object" && u !== null;
 }
 function isServicoMinimal(u: unknown): u is RjServicoMinimal {
-  if (!isObject(u)) return false;
-  // basta ser objeto; campos são opcionais e validados na extração
-  return true;
+  return isObject(u);
 }
 function parseCorridaEnvelope(u: unknown): RjBuscaCorridaEnvelope | null {
   if (!isObject(u)) return null;
@@ -57,23 +58,19 @@ const toIso = (ymd: string) => `${ymd}T00:00:00.000Z`;
 // ===== Handler =====
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
-  const origemIdStr = p.get("origemId");
-  const destinoIdStr = p.get("destinoId");
+  const origemId = Number(p.get("origemId"));
+  const destinoId = Number(p.get("destinoId"));
   const dateYmd = p.get("data") ?? "";
-  const indexStr = p.get("index") ?? "0";
+  const index = Number(p.get("index") ?? 0);
 
-  const origemId = origemIdStr ? Number(origemIdStr) : NaN;
-  const destinoId = destinoIdStr ? Number(destinoIdStr) : NaN;
-  const index = Number(indexStr);
-
-  if (!Number.isFinite(origemId) || !Number.isFinite(destinoId) || !dateYmd) {
+  if (!origemId || !destinoId || !dateYmd) {
     return NextResponse.json(
       { error: "origemId, destinoId e data (YYYY-MM-DD) são obrigatórios." },
       { status: 400 }
     );
   }
 
-  // 1) Buscar serviços para obter campos do serviço selecionado
+  // 1) Buscar corridas
   const corrRes = await fetch(`${BASE}/consultacorrida/buscaCorrida`, {
     method: "POST",
     headers: {
@@ -94,7 +91,7 @@ export async function GET(req: NextRequest) {
   }
 
   let corrJson: unknown = {};
-  try { corrJson = corrText ? JSON.parse(corrText) : {}; } catch { corrJson = {}; }
+  try { corrJson = corrText ? JSON.parse(corrText) : {}; } catch {}
 
   const env = parseCorridaEnvelope(corrJson);
   if (!env || env.lsServicos.length === 0) {
@@ -106,11 +103,11 @@ export async function GET(req: NextRequest) {
 
   const svc = env.lsServicos[Math.max(0, Math.min(index, env.lsServicos.length - 1))];
 
-  // 2) Montar candidatos de payload para /consultaonibus/buscaOnibus
+  // 2) Candidatos para buscaOnibus
   const empresa =
-    (typeof svc.empresa === "string" && svc.empresa) ||
-    (typeof svc.operadora === "string" && svc.operadora) ||
-    (typeof svc.companhia === "string" && svc.companhia) ||
+    svc.empresa ||
+    svc.operadora ||
+    svc.companhia ||
     "VOP";
 
   const candidates: ReadonlyArray<Record<string, unknown>> = [
@@ -119,11 +116,18 @@ export async function GET(req: NextRequest) {
     { codigo: svc.codigo },
     { codigoServico: svc.codigoServico },
     { origem: origemId, destino: destinoId, data: dateYmd, empresa },
-    { idLocalidadeOrigem: origemId, idLocalidadeDestino: destinoId, data: dateYmd, servico: svc.servico ?? svc.tipo ?? "CONV" },
+    {
+      idLocalidadeOrigem: origemId,
+      idLocalidadeDestino: destinoId,
+      data: dateYmd,
+      servico: svc.servico ?? svc.tipo ?? "CONV",
+    },
     { origem: origemId, destino: destinoId, data: toIso(dateYmd), empresa },
-  ].map(pickNonEmpty).filter((o) => Object.keys(o).length > 0);
+  ]
+    .map(pickNonEmpty)
+    .filter((o) => Object.keys(o).length > 0);
 
-  // 3) Tentar cada payload até um 200 OK
+  // 3) Executar tentativas
   for (const body of candidates) {
     const r = await fetch(`${BASE}/consultaonibus/buscaOnibus`, {
       method: "POST",
@@ -140,6 +144,7 @@ export async function GET(req: NextRequest) {
     if (r.ok) {
       let json: unknown = null;
       try { json = text ? JSON.parse(text) : null; } catch { json = text; }
+
       return NextResponse.json(
         { usedBody: body, status: r.status, json, sample: text.slice(0, 600) },
         { status: 200 }

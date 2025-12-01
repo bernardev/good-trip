@@ -134,7 +134,7 @@ type RjOnibusByService = {
 };
 
 // ====== ENV / base ======
-const BASE = process.env.VIOP_BASE_URL ?? "";
+const BASE = "https://goodtrip.com.br/proxy-viop.php";
 const TENANT = process.env.VIOP_TENANT_ID ?? "";
 const USER = process.env.VIOP_USER ?? "";
 const PASS = process.env.VIOP_PASS ?? "";
@@ -163,7 +163,7 @@ async function viopFetch<T>(
   console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
   
-  const url = `${BASE}${path}`;
+  const url = BASE;
   
   // 🎯 USAR BASIC AUTH - IGUAL AO POSTMAN
   const headers = {
@@ -184,7 +184,11 @@ async function viopFetch<T>(
     const res = await fetch(url, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined,
+      body: JSON.stringify({
+        path,
+        method,
+        payload: body ?? null
+      }),
       cache: "no-store",
       next: { revalidate: 0 },
     });

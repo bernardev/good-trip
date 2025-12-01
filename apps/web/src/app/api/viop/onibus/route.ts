@@ -1,12 +1,29 @@
 // app/api/viop/onibus/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-const BASE   = process.env.VIOP_BASE_URL!;
-const TENANT = process.env.VIOP_TENANT_ID!;
-const USER   = process.env.VIOP_USER!;
-const PASS   = process.env.VIOP_PASS!;
-const AUTH = "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64");
+// --- SEU PROXY FIXO ---
+const PROXY = "https://goodtrip.com.br/proxy-viop.php";
 
+// Função para POST via proxy
+async function viopPostJSON<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const url = `${PROXY}?path=${encodeURIComponent(path)}`;
+
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  const text = await r.text().catch(() => "");
+
+  if (!r.ok)
+    throw new Error(`${path} ${r.status}: ${text.slice(0, 200)}`);
+
+  return (text ? JSON.parse(text) : null) as T;
+}
+
+// Tipos originais (inalterados)
 type IsoDate = `${number}-${number}-${number}`;
 
 interface MapaPoltrona {
@@ -52,50 +69,48 @@ interface BuscaCorridaResp {
   lsServicos: ViopServico[];
 }
 
-async function viopPostJSON<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const r = await fetch(`${BASE}${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-tenant-id": TENANT, authorization: AUTH },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
-  const text = await r.text().catch(()=>"");
-  if (!r.ok) throw new Error(`${path} ${r.status}: ${text.slice(0,200)}`);
-  return (text ? JSON.parse(text) : null) as T;
-}
-
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
+
   const origemId  = p.get("origemId");
   const destinoId = p.get("destinoId");
   const data      = p.get("data") as IsoDate | null;
-  const servico   = p.get("servico"); // ex.: "20531"
+  const servico   = p.get("servico");
 
   if (!origemId || !destinoId || !data || !servico) {
     return NextResponse.json(
-      { ok:false, error: "origemId, destinoId, data, servico são obrigatórios" },
+      { ok: false, error: "origemId, destinoId, data, servico são obrigatórios" },
       { status: 400 }
     );
   }
 
   try {
-    // 1) Enriquecer com preço/infos do serviço da corrida
-    const corrida = await viopPostJSON<BuscaCorridaResp>("/consultacorrida/buscaCorrida", {
-      origem: origemId, destino: destinoId, data
-    });
-    const svc = corrida.lsServicos.find(s => String(s.servico) === String(servico));
+    // 1 — Buscar lista de serviços
+    const corrida = await viopPostJSON<BuscaCorridaResp>(
+      "/consultacorrida/buscaCorrida",
+      { origem: origemId, destino: destinoId, data }
+    );
+
+    const svc = corrida.lsServicos.find(
+      s => String(s.servico) === String(servico)
+    );
+
     if (!svc) {
       return NextResponse.json(
-        { ok:false, error: "Serviço não encontrado em lsServicos para esta data/rota." },
+        { ok: false, error: "Serviço não encontrado em lsServicos." },
         { status: 404 }
       );
     }
 
-    // 2) Mapa de assentos (payload validado em testes)
+    // 2 — Buscar mapa de assentos
     const body = { servico, origem: origemId, destino: destinoId, data };
-    const mapa = await viopPostJSON<BuscaOnibusResp>("/consultaonibus/buscaOnibus", body);
 
-    // 3) Resposta unificada (sem any)
+    const mapa = await viopPostJSON<BuscaOnibusResp>(
+      "/consultaonibus/buscaOnibus",
+      body
+    );
+
+    // 3 — Resposta unificada
     return NextResponse.json({
       ok: true,
       usedBody: body,
@@ -113,10 +128,11 @@ export async function GET(req: NextRequest) {
         saida: svc.saida ?? mapa.dataSaida,
         chegada: svc.chegada ?? mapa.dataChegada,
       },
-      seats: mapa, // JSON original do buscaOnibus
+      seats: mapa,
     });
+
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erro desconhecido";
-    return NextResponse.json({ ok:false, error: msg }, { status: 502 });
+    return NextResponse.json({ ok: false, error: msg }, { status: 502 });
   }
 }

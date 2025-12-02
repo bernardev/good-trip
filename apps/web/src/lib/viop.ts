@@ -134,8 +134,8 @@ type RjOnibusByService = {
 };
 
 // ====== ENV / base ======
-// 🧪 TESTE TEMPORÁRIO: Chamada direta (VER CREDENCIAIS NO DEVTOOLS!)
-const BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
+// 🔥 Proxy interno da Vercel
+const BASE = "/api/viop-proxy";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
 const USER = "GOODTRIPAPI";
 const PASS = "@g1t2#";
@@ -164,20 +164,17 @@ async function viopFetch<T>(
   console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
   
-  // 🧪 URL direta para teste
-  const url = `${BASE}${path}`;
+  // Proxy interno: precisa de URL completa no servidor
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const url = `${baseUrl}${BASE}?path=${encodeURIComponent(path)}`;
   
   const headers = {
     "content-type": "application/json",
-    "x-tenant-id": TENANT,
-    "user-agent": "GoodTrip/1.0",
-    "authorization": AUTH,
   };
 
   console.error("📡 REQUEST:", {
     url,
     method,
-    headers,
     body: body ? JSON.stringify(body).substring(0, 200) : undefined,
   });
 

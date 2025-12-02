@@ -1,31 +1,22 @@
 import { NextResponse } from "next/server";
 
-// Teste DIRETO com a API VIOP (sem proxy)
-const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
-const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
-const AUTH = "Basic R09PRFRSSVBBUEk6QGcxdDIj";
+// 🧪 TESTE DO PROXY HOSTGATOR
+const PROXY_URL = "https://goodtrip.com.br/proxy-viop.php";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
-    const url = `${VIOP_BASE}/localidade/buscaOrigem`;
+    const url = `${PROXY_URL}?path=/localidade/buscaOrigem`;
     
-    console.log("🧪 TESTE DIRETO (SEM PROXY)");
+    console.log("🧪 TESTE PROXY HOSTGATOR");
     console.log("URL:", url);
-    
-    const headers = {
-      "content-type": "application/json",
-      "x-tenant-id": TENANT,
-      "user-agent": "GoodTrip/1.0",
-      "authorization": AUTH,
-    };
-    
-    console.log("Headers:", headers);
     
     const response = await fetch(url, {
       method: "GET",
-      headers,
+      headers: {
+        "content-type": "application/json",
+      },
       cache: "no-store",
     });
     
@@ -39,7 +30,7 @@ export async function GET(req: Request) {
       return NextResponse.json(
         { 
           ok: false, 
-          error: "API VIOP retornou erro",
+          error: "Proxy retornou erro",
           status: response.status,
           response: text 
         },
@@ -51,7 +42,7 @@ export async function GET(req: Request) {
     
     return NextResponse.json({ 
       ok: true, 
-      message: "✅ Sucesso! API VIOP respondeu direto",
+      message: "✅ Sucesso! Proxy funcionou",
       items: data,
       count: Array.isArray(data) ? data.length : 0
     });

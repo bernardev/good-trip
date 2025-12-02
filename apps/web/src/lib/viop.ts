@@ -163,14 +163,14 @@ async function viopFetch<T>(
   console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
   
-  const url = BASE;
+  // 🔥 CORREÇÃO: path vai como query parameter para o proxy PHP
+  const url = `${BASE}?path=${encodeURIComponent(path)}`;
   
-  // 🎯 USAR BASIC AUTH - IGUAL AO POSTMAN
   const headers = {
     "content-type": "application/json",
     "x-tenant-id": TENANT,
     "user-agent": "GoodTrip/1.0",
-    "authorization": AUTH, // Basic Auth aqui!
+    "authorization": AUTH,
   };
 
   console.error("📡 REQUEST:", {
@@ -181,17 +181,19 @@ async function viopFetch<T>(
   });
 
   try {
-    const res = await fetch(url, {
+    const fetchOptions: RequestInit = {
       method,
       headers,
-      body: JSON.stringify({
-        path,
-        method,
-        payload: body ?? null
-      }),
       cache: "no-store",
       next: { revalidate: 0 },
-    });
+    };
+
+    // 🔥 Só adiciona body se for POST e tiver payload
+    if (method === "POST" && body) {
+      fetchOptions.body = JSON.stringify(body);
+    }
+
+    const res = await fetch(url, fetchOptions);
 
     console.error("📥 RESPONSE:", {
       status: res.status,
@@ -474,32 +476,10 @@ export const Viop = {
       data: ymd,
     };
 
-    const res = await fetch(`${BASE}${Path.consultacorrida.buscar()}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-tenant-id": TENANT,
-        "authorization": AUTH,
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
-    });
+    // 🔥 CORREÇÃO: usar viopFetch para passar pelo proxy
+    const res = await viopFetch<unknown>(Path.consultacorrida.buscar(), "POST", body);
 
-    if (res.status === 204) return [];
-
-    const txt = await res.text().catch(() => "");
-    if (!res.ok) {
-      throw new Error(`buscaCorrida falhou: ${res.status} ${txt}`);
-    }
-
-    let parsed: unknown = {};
-    try {
-      parsed = txt ? (JSON.parse(txt) as unknown) : {};
-    } catch {
-      parsed = {};
-    }
-
-    const servicos = parseCorridasFromUnknown(parsed);
+    const servicos = parseCorridasFromUnknown(res);
     return servicos.map(mapRjServicoToCorrida);
   },
 

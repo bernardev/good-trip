@@ -134,10 +134,10 @@ type RjOnibusByService = {
 };
 
 // ====== ENV / base ======
-const BASE = "https://goodtrip.com.br/proxy-viop.php";
-const TENANT = process.env.VIOP_TENANT_ID ?? "";
-const USER = process.env.VIOP_USER ?? "";
-const PASS = process.env.VIOP_PASS ?? "";
+const BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
+const TENANT = process.env.VIOP_TENANT_ID ?? "36906f34-b731-46bc-a19d-a6d8923ac2e7";
+const USER = process.env.VIOP_USER ?? "GOODTRIPAPI";
+const PASS = process.env.VIOP_PASS ?? "@g1t2#";
 const FORCE_MOCK = process.env.VIOP_FORCE_MOCK === "1";
 const MOCK = FORCE_MOCK || !BASE || !TENANT || !USER || !PASS;
 
@@ -163,8 +163,8 @@ async function viopFetch<T>(
   console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
   
-  // 🔥 CORREÇÃO: path vai como query parameter para o proxy PHP
-  const url = `${BASE}?path=${encodeURIComponent(path)}`;
+  // 🔥 URL direta (sem proxy)
+  const url = `${BASE}${path}`;
   
   const headers = {
     "content-type": "application/json",

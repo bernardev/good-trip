@@ -164,17 +164,34 @@ async function viopFetch<T>(
   console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
   
-  // Proxy interno: precisa de URL completa no servidor
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-  const url = `${baseUrl}${BASE}?path=${encodeURIComponent(path)}`;
+  // 🔥 Se estiver rodando no servidor (Edge Runtime), chamar direto a API VIOP
+  const isServer = typeof window === "undefined";
   
-  const headers = {
-    "content-type": "application/json",
-  };
+  let url: string;
+  let headers: Record<string, string>;
+  
+  if (isServer) {
+    // Servidor: chama direto a API VIOP
+    url = `https://apiouroprata.rjconsultores.com.br/api-gateway${path}`;
+    headers = {
+      "content-type": "application/json",
+      "x-tenant-id": TENANT,
+      "user-agent": "GoodTrip/1.0",
+      "authorization": AUTH,
+    };
+  } else {
+    // Cliente: usa proxy interno
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    url = `${baseUrl}${BASE}?path=${encodeURIComponent(path)}`;
+    headers = {
+      "content-type": "application/json",
+    };
+  }
 
   console.error("📡 REQUEST:", {
     url,
     method,
+    isServer,
     body: body ? JSON.stringify(body).substring(0, 200) : undefined,
   });
 

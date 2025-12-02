@@ -134,10 +134,11 @@ type RjOnibusByService = {
 };
 
 // ====== ENV / base ======
+// 🧪 TESTE TEMPORÁRIO: Chamada direta (VER CREDENCIAIS NO DEVTOOLS!)
 const BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
-const TENANT = process.env.VIOP_TENANT_ID ?? "36906f34-b731-46bc-a19d-a6d8923ac2e7";
-const USER = process.env.VIOP_USER ?? "GOODTRIPAPI";
-const PASS = process.env.VIOP_PASS ?? "@g1t2#";
+const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
+const USER = "GOODTRIPAPI";
+const PASS = "@g1t2#";
 const FORCE_MOCK = process.env.VIOP_FORCE_MOCK === "1";
 const MOCK = FORCE_MOCK || !BASE || !TENANT || !USER || !PASS;
 
@@ -163,7 +164,7 @@ async function viopFetch<T>(
   console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
   
-  // 🔥 URL direta (sem proxy)
+  // 🧪 URL direta para teste
   const url = `${BASE}${path}`;
   
   const headers = {
@@ -188,7 +189,6 @@ async function viopFetch<T>(
       next: { revalidate: 0 },
     };
 
-    // 🔥 Só adiciona body se for POST e tiver payload
     if (method === "POST" && body) {
       fetchOptions.body = JSON.stringify(body);
     }

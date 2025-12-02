@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 
     // 🔄 IMPORTANTE:
     // Vamos injetar o PROXY diretamente na classe Viop
-    const items: Origem[] = await Viop.buscarOrigens(q, PROXY);
+    const items: Origem[] = await Viop.buscarOrigens(q);
 
     console.log("✅ Sucesso! Items retornados:", items.length);
 

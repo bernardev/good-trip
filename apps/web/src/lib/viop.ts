@@ -134,8 +134,8 @@ type RjOnibusByService = {
 };
 
 // ====== ENV / base ======
-// 🔥 Proxy interno da Vercel
-const BASE = "/api/viop-proxy";
+// 🔥 Proxy externo (Hostgator) - único que funciona
+const BASE = "https://goodtrip.com.br/proxy-viop.php";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
 const USER = "GOODTRIPAPI";
 const PASS = "@g1t2#";
@@ -164,34 +164,16 @@ async function viopFetch<T>(
   console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
   
-  // 🔥 Se estiver rodando no servidor (Edge Runtime), chamar direto a API VIOP
-  const isServer = typeof window === "undefined";
+  // Proxy Hostgator: path como query parameter
+  const url = `${BASE}?path=${encodeURIComponent(path)}`;
   
-  let url: string;
-  let headers: Record<string, string>;
-  
-  if (isServer) {
-    // Servidor: chama direto a API VIOP
-    url = `https://apiouroprata.rjconsultores.com.br/api-gateway${path}`;
-    headers = {
-      "content-type": "application/json",
-      "x-tenant-id": TENANT,
-      "user-agent": "GoodTrip/1.0",
-      "authorization": AUTH,
-    };
-  } else {
-    // Cliente: usa proxy interno
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-    url = `${baseUrl}${BASE}?path=${encodeURIComponent(path)}`;
-    headers = {
-      "content-type": "application/json",
-    };
-  }
+  const headers = {
+    "content-type": "application/json",
+  };
 
   console.error("📡 REQUEST:", {
     url,
     method,
-    isServer,
     body: body ? JSON.stringify(body).substring(0, 200) : undefined,
   });
 
@@ -200,7 +182,6 @@ async function viopFetch<T>(
       method,
       headers,
       cache: "no-store",
-      next: { revalidate: 0 },
     };
 
     if (method === "POST" && body) {

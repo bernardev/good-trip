@@ -1,9 +1,5 @@
 {
-  "functions": {
-    "apps/web/src/app/api/viop-proxy/route.ts": {
-      "memory": 1024,
-      "maxDuration": 10,
-      "regions": ["gru1"]
-    }
-  }
+  "regions": [
+    "gru1"
+  ]
 }

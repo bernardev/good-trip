@@ -156,8 +156,9 @@ async function viopFetch<T>(
   console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
   
-  // Proxy Vercel: path como query parameter
-  const url = `${BASE}?path=${encodeURIComponent(path)}`;
+  // URL completa (funciona em produção e local)
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const url = `${baseUrl}${BASE}?path=${encodeURIComponent(path)}`;
   
   const headers = {
     "content-type": "application/json",

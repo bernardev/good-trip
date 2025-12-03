@@ -156,17 +156,20 @@ async function viopFetch<T>(
   console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
   
-  // URL completa (funciona em produção e local)
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-  const url = `${baseUrl}${BASE}?path=${encodeURIComponent(path)}`;
+  // 🔥 Chamar direto a API VIOP (proxy interno causa loop)
+  const url = `https://apiouroprata.rjconsultores.com.br/api-gateway${path}`;
   
   const headers = {
     "content-type": "application/json",
+    "x-tenant-id": TENANT,
+    "user-agent": "PostmanRuntime/7.49.1",
+    "authorization": AUTH,
   };
 
   console.error("📡 REQUEST:", {
     url,
     method,
+    headers,
     body: body ? JSON.stringify(body).substring(0, 200) : undefined,
   });
 

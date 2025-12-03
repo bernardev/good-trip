@@ -26,7 +26,7 @@ async function handleProxy(req: NextRequest, method: "GET" | "POST") {
     const headers = {
       "content-type": "application/json",
       "x-tenant-id": TENANT,
-      "user-agent": "GoodTrip/1.0",
+      "user-agent": "PostmanRuntime/7.49.1", // 🔥 Simular Postman
       "authorization": AUTH,
     };
     

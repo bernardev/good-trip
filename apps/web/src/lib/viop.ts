@@ -47,12 +47,11 @@ export type ConfirmarVendaRes = {
 type RjLocalidade = {
   id: number;
   cidade: string;
-  sigla: string; // sigla da cidade/rodoviária
+  sigla: string;
   uf: string;
   empresas: string;
 };
 
-// Serviço/corrida (campos variam por parceiro; todos opcionais e tipados)
 type RjServico = {
   servico?: string | number;
   id?: string | number;
@@ -60,25 +59,20 @@ type RjServico = {
   idViagem?: string | number;
   codigo?: string | number;
   codigoServico?: string | number;
-
   dataPartida?: string;
   saida?: string;
   partida?: string;
   dtSaida?: string;
   horaSaida?: string;
-
   dataChegada?: string;
   chegada?: string;
   dtChegada?: string;
   horaChegada?: string;
-
   empresa?: string;
   operadora?: string;
   companhia?: string;
-
   duracaoMin?: number;
   duracao?: number;
-
   tarifaDesde?: number;
   precoDesde?: number;
   preco?: number;
@@ -89,13 +83,13 @@ type RjServico = {
 type RjBuscaCorridaRequest = {
   origem: number;
   destino: number;
-  data: string; // YYYY-MM-DD
+  data: string;
 };
 
 type RjBuscaCorridaResponse = {
   origem: RjLocalidade;
   destino: RjLocalidade;
-  data: string; // YYYY-MM-DD
+  data: string;
   lsServicos: RjServico[];
 };
 
@@ -106,12 +100,11 @@ type RjOnibus = {
   veiculo?: string;
 };
 
-// --- Assentos por serviço (payload confirmado VIOP) ---
 export type OnibusByServiceReq = {
-  servico: string;   // id do serviço/corrida
-  origem: string;    // ids numéricos em string
+  servico: string;
+  origem: string;
   destino: string;
-  data: string;      // YYYY-MM-DD
+  data: string;
 };
 
 type RjSeat = {
@@ -119,30 +112,29 @@ type RjSeat = {
   poltrona?: string | number;
   assento?: string | number;
   livre?: boolean;
-  status?: string;              // "LIVRE", "OCUPADA", etc.
-  disponibilidade?: string;     // "DISPONIVEL", "INDISPONIVEL"
-  flag?: string | number | boolean; // "S"/"N", 1/0, true/false (alguns gateways)
+  status?: string;
+  disponibilidade?: string;
+  flag?: string | number | boolean;
   classe?: string;
 };
 
 type RjOnibusByService = {
   corridaId?: string | number;
-  seats?: { mapaPoltrona?: unknown }; // pode variar bastante
-  poltronas?: unknown;                // pode ser array direto
+  seats?: { mapaPoltrona?: unknown };
+  poltronas?: unknown;
   servicos?: string[];
   veiculo?: string;
 };
 
 // ====== ENV / base ======
-// 🔥 Proxy externo (Hostgator) - único que funciona
-const BASE = "https://goodtrip.com.br/proxy-viop.php";
+// 🔥 Proxy Vercel (região Brasil - gru1)
+const BASE = "/api/viop-proxy";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
 const USER = "GOODTRIPAPI";
 const PASS = "@g1t2#";
 const FORCE_MOCK = process.env.VIOP_FORCE_MOCK === "1";
 const MOCK = FORCE_MOCK || !BASE || !TENANT || !USER || !PASS;
 
-// 🔥 BASIC AUTH - IGUAL AO POSTMAN
 const AUTH = USER && PASS 
   ? "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64") 
   : "";
@@ -164,7 +156,7 @@ async function viopFetch<T>(
   console.error("🚀 VIOP FETCH");
   console.error("=".repeat(50));
   
-  // Proxy Hostgator: path como query parameter
+  // Proxy Vercel: path como query parameter
   const url = `${BASE}?path=${encodeURIComponent(path)}`;
   
   const headers = {
@@ -212,17 +204,17 @@ async function viopFetch<T>(
   }
 }
 
-// ====== Endpoints (paths reais + placeholders) ======
+// ====== Endpoints ======
 const Path = {
   localidade: {
-    origem: () => `/localidade/buscaOrigem`, // GET
-    destino: (origemId: string | number) => `/localidade/buscaDestino/${origemId}`, // GET
+    origem: () => `/localidade/buscaOrigem`,
+    destino: (origemId: string | number) => `/localidade/buscaDestino/${origemId}`,
   },
   consultacorrida: {
-    buscar: () => `/consultacorrida/buscaCorrida`, // POST
+    buscar: () => `/consultacorrida/buscaCorrida`,
   },
   consultaonibus: {
-    buscar: () => `/consultaonibus/buscaOnibus`, // POST
+    buscar: () => `/consultaonibus/buscaOnibus`,
   },
   venda: {
     bloquear: `/viacaoouroprata/bloquearPoltrona`,
@@ -230,7 +222,7 @@ const Path = {
   },
 } as const;
 
-// ====== Mocks (tipados) ======
+// ====== Mocks ======
 function mockOrigens(q: string): Origem[] {
   const data: Origem[] = [
     { id: "CWB", nome: "Curitiba - PR" },
@@ -280,7 +272,7 @@ function mockConfirmar(): ConfirmarVendaRes {
   return { localizador: "ABC123", status: "CONFIRMADO", total: 129.9 };
 }
 
-// ====== Adapters (RJ -> internos) ======
+// ====== Adapters ======
 function mapLocalidadeToOrigem(x: RjLocalidade): Origem {
   return { id: String(x.id), nome: `${x.cidade} - ${x.uf}` };
 }
@@ -291,35 +283,23 @@ function mapLocalidadeToDestino(x: RjLocalidade): Destino {
 function mapRjServicoToCorrida(x: RjServico): Corrida {
   const idCandidate =
     x.servico ?? x.id ?? x.idServico ?? x.idViagem ?? x.codigo ?? x.codigoServico ?? "indefinido";
-
   const partida =
     x.dataPartida ?? x.saida ?? x.partida ?? x.dtSaida ?? x.horaSaida ?? null;
-
   const chegada =
     x.dataChegada ?? x.chegada ?? x.dtChegada ?? x.horaChegada ?? null;
-
   const empresa = x.empresa ?? x.operadora ?? x.companhia ?? "VOP";
-
   const duracaoMinCalc =
     typeof x.duracaoMin === "number"
       ? x.duracaoMin
       : typeof x.duracao === "number"
       ? x.duracao
       : partida && chegada
-      ? Math.max(
-          0,
-          Math.round(
-            (new Date(chegada).getTime() - new Date(partida).getTime()) / 60000
-          )
-        )
+      ? Math.max(0, Math.round((new Date(chegada).getTime() - new Date(partida).getTime()) / 60000))
       : 0;
-
   const tarifaRaw =
     x.tarifaDesde ?? x.precoDesde ?? x.preco ?? x.valor ?? x.valorDesde ?? 0;
-
   const tarifaNum =
     typeof tarifaRaw === "number" ? tarifaRaw : Number(String(tarifaRaw));
-
   return {
     id: String(idCandidate),
     dataPartida: partida ?? new Date().toISOString(),
@@ -330,9 +310,7 @@ function mapRjServicoToCorrida(x: RjServico): Corrida {
   };
 }
 
-// ====== Helpers ======
 function parseCorridasFromUnknown(u: unknown): RjServico[] {
-  // shape oficial { origem, destino, data, lsServicos: [...] }
   if (
     typeof u === "object" &&
     u !== null &&
@@ -340,30 +318,19 @@ function parseCorridasFromUnknown(u: unknown): RjServico[] {
   ) {
     return (u as RjBuscaCorridaResponse).lsServicos;
   }
-
-  // alguns parceiros retornam diretamente um array de serviços
   if (Array.isArray(u)) {
     return u as RjServico[];
   }
-
-  // wrappers comuns
   if (typeof u === "object" && u !== null) {
     const o = u as Record<string, unknown>;
     const keys: ReadonlyArray<keyof typeof o> = [
-      "servicos",
-      "corridas",
-      "lista",
-      "list",
-      "data",
-      "result",
-      "results",
+      "servicos", "corridas", "lista", "list", "data", "result", "results",
     ];
     for (const k of keys) {
       const v = o[k];
       if (Array.isArray(v)) return v as RjServico[];
     }
   }
-
   return [];
 }
 
@@ -384,16 +351,13 @@ function mapSeat(p: RjSeat): Poltrona {
   return { numero: String(n), livre, classe: p.classe };
 }
 
-// ==== Utilitários de parsing seguro (sem any) para seats ====
 function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null;
 }
 function isSeatCandidate(x: unknown): x is RjSeat {
   if (!isRecord(x)) return false;
-  const hasNumero =
-    "numero" in x || "assento" in x || "poltrona" in x;
-  const hasEstado =
-    "livre" in x || "status" in x || "disponibilidade" in x || "flag" in x;
+  const hasNumero = "numero" in x || "assento" in x || "poltrona" in x;
+  const hasEstado = "livre" in x || "status" in x || "disponibilidade" in x || "flag" in x;
   return hasNumero && hasEstado;
 }
 function collectSeatsDeep(x: unknown, out: RjSeat[]): void {
@@ -412,9 +376,8 @@ function collectSeatsDeep(x: unknown, out: RjSeat[]): void {
   }
 }
 
-// ====== API pública (fortemente tipada) ======
+// ====== API pública ======
 export const Viop = {
-  // ORIGENS: GET /localidade/buscaOrigem (filtramos por q no servidor)
   async buscarOrigens(q: string): Promise<Origem[]> {
     if (MOCK) return Promise.resolve(mockOrigens(q));
     const list = await viopFetch<RjLocalidade[]>(Path.localidade.origem());
@@ -426,7 +389,6 @@ export const Viop = {
     );
   },
 
-  // DESTINOS: GET /localidade/buscaDestino/{origemId}
   async buscarDestinos(origemId: string, q: string): Promise<Destino[]> {
     if (MOCK) {
       const all: Destino[] = mockDestinos();
@@ -451,34 +413,27 @@ export const Viop = {
     );
   },
 
-  // CORRIDAS: POST /consultacorrida/buscaCorrida – payload confirmado: { origem, destino, data }
   async buscarCorridas(
     origemId: string,
     destinoId: string,
     dataIso: string
   ): Promise<Corrida[]> {
     if (MOCK) return Promise.resolve(mockCorridas());
-
     const d = new Date(dataIso);
     const y = d.getUTCFullYear();
     const m = String(d.getUTCMonth() + 1).padStart(2, "0");
     const day = String(d.getUTCDate()).padStart(2, "0");
-    const ymd = `${y}-${m}-${day}`; // YYYY-MM-DD
-
+    const ymd = `${y}-${m}-${day}`;
     const body: RjBuscaCorridaRequest = {
       origem: Number(origemId),
       destino: Number(destinoId),
       data: ymd,
     };
-
-    // 🔥 CORREÇÃO: usar viopFetch para passar pelo proxy
     const res = await viopFetch<unknown>(Path.consultacorrida.buscar(), "POST", body);
-
     const servicos = parseCorridasFromUnknown(res);
     return servicos.map(mapRjServicoToCorrida);
   },
 
-  // ÔNIBUS (assentos): POST /consultaonibus/buscaOnibus (payload legado por corridaId)
   async buscarOnibus(corridaId: string): Promise<Onibus> {
     if (MOCK) return Promise.resolve(mockOnibus(corridaId));
     const payload: { corridaId: string } = { corridaId };
@@ -495,26 +450,19 @@ export const Viop = {
     };
   },
 
-  // ÔNIBUS (assentos) — payload específico VIOP: { servico, origem, destino, data }
   async buscarOnibusByService(req: OnibusByServiceReq): Promise<Onibus> {
     if (MOCK) return Promise.resolve(mockOnibus(req.servico));
     const data = await viopFetch<RjOnibusByService>(Path.consultaonibus.buscar(), "POST", req);
-
-    // --- extrator robusto de seats (sem any) ---
     const pickSeats = (d: RjOnibusByService): RjSeat[] => {
-      // 1) array direto em seats.mapaPoltrona
       if (d.seats && isRecord(d.seats)) {
         const mp = d.seats.mapaPoltrona;
         if (Array.isArray(mp)) return mp.filter(isSeatCandidate);
         if (isRecord(mp)) {
-          // pode vir como { linhas:[{colunas:[...]}, ...] } etc.
           const out1: RjSeat[] = [];
           collectSeatsDeep(mp, out1);
           if (out1.length) return out1;
         }
       }
-
-      // 2) array direto em poltronas
       if (Array.isArray(d.poltronas)) {
         return d.poltronas.filter(isSeatCandidate);
       }
@@ -523,15 +471,11 @@ export const Viop = {
         collectSeatsDeep(d.poltronas, out2);
         if (out2.length) return out2;
       }
-
-      // 3) varredura completa em d
       const out3: RjSeat[] = [];
       collectSeatsDeep(d, out3);
       return out3;
     };
-
     const rawSeats: RjSeat[] = pickSeats(data);
-
     return {
       corridaId: String(data.corridaId ?? req.servico),
       poltronas: rawSeats.map(mapSeat),
@@ -540,13 +484,11 @@ export const Viop = {
     };
   },
 
-  // BLOQUEAR (placeholders até validar com o parceiro)
   async bloquearPoltrona(payload: BloquearPoltronaReq): Promise<BloquearPoltronaRes> {
     if (MOCK) return Promise.resolve(mockBloquear());
     return viopFetch<BloquearPoltronaRes>(Path.venda.bloquear, "POST", payload);
   },
 
-  // CONFIRMAR (placeholders até validar com o parceiro)
   async confirmarVenda(payload: ConfirmarVendaReq): Promise<ConfirmarVendaRes> {
     if (MOCK) return Promise.resolve(mockConfirmar());
     return viopFetch<ConfirmarVendaRes>(Path.venda.confirmar, "POST", payload);

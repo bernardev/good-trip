@@ -1,25 +1,28 @@
 // app/api/viop/onibus/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-// --- SEU PROXY FIXO ---
-const PROXY = "https://goodtrip.com.br/proxy-viop.php";
+// Credenciais
+const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
+const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
+const AUTH = "Basic R09PRFRSSVBBUEk6QGcxdDIj";
 
-// Função para POST via proxy
+// Função para POST direto na API VIOP
 async function viopPostJSON<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const url = `${PROXY}?path=${encodeURIComponent(path)}`;
-
+  const url = `${VIOP_BASE}${path}`;
   const r = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { 
+      "content-type": "application/json",
+      "x-tenant-id": TENANT,
+      "authorization": AUTH,
+      "user-agent": "PostmanRuntime/7.49.1"
+    },
     body: JSON.stringify(body),
     cache: "no-store",
   });
-
   const text = await r.text().catch(() => "");
-
   if (!r.ok)
     throw new Error(`${path} ${r.status}: ${text.slice(0, 200)}`);
-
   return (text ? JSON.parse(text) : null) as T;
 }
 
@@ -27,8 +30,13 @@ async function viopPostJSON<T>(path: string, body: Record<string, unknown>): Pro
 type IsoDate = `${number}-${number}-${number}`;
 
 interface MapaPoltrona {
-  x: string; y: string; disponivel: boolean; numero: string; categoriaReservadaId: number;
+  x: string; 
+  y: string; 
+  disponivel: boolean; 
+  numero: string; 
+  categoriaReservadaId: number;
 }
+
 interface BuscaOnibusResp {
   origem: { id: number; cidade: string; sigla: string; uf: string; empresas: string };
   destino:{ id: number; cidade: string; sigla: string; uf: string; empresas: string };
@@ -69,9 +77,10 @@ interface BuscaCorridaResp {
   lsServicos: ViopServico[];
 }
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
-
   const origemId  = p.get("origemId");
   const destinoId = p.get("destinoId");
   const data      = p.get("data") as IsoDate | null;
@@ -104,7 +113,6 @@ export async function GET(req: NextRequest) {
 
     // 2 — Buscar mapa de assentos
     const body = { servico, origem: origemId, destino: destinoId, data };
-
     const mapa = await viopPostJSON<BuscaOnibusResp>(
       "/consultaonibus/buscaOnibus",
       body
@@ -130,8 +138,8 @@ export async function GET(req: NextRequest) {
       },
       seats: mapa,
     });
-
   } catch (e) {
+    console.error("❌ ERRO onibus/route:", e);
     const msg = e instanceof Error ? e.message : "Erro desconhecido";
     return NextResponse.json({ ok: false, error: msg }, { status: 502 });
   }

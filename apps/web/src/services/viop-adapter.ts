@@ -39,8 +39,8 @@ interface ViopServiceMeta {
   poltronasTotal?: number;
   poltronasLivres?: number;
   dataCorrida?: string; // YYYY-MM-DD
-  saida?: string;       // HH:MM
-  chegada?: string;     // HH:MM
+  saida?: string;       // pode vir como "YYYY-MM-DD HH:MM" ou "HH:MM"
+  chegada?: string;     // pode vir como "YYYY-MM-DD HH:MM" ou "HH:MM"
 }
 
 interface ViopSeatsInfo {
@@ -83,7 +83,6 @@ export class ViopAdapter {
   }): Promise<UnifiedTrip[]> {
     try {
       console.log('🔍 [VIOP] Buscando:', params);
-
       const baseUrl = this.getBaseUrl();
 
       // 1) Corridas (lista de serviços)
@@ -172,11 +171,8 @@ export class ViopAdapter {
 
   /**
    * Tenta extrair o ID do serviço a partir de um ID composto de corrida
-   * Formatos possíveis variam; mantemos simples e seguro.
    */
   private extractServicoFromCorridaId(id: string): string {
-    // Se houver hífen e o padrão "SERVICO-XXXX", prioriza a primeira parte;
-    // caso contrário, retornamos string vazia para o chamador decidir o fallback.
     const parts = id.split('-');
     return parts.length > 0 ? parts[0] : '';
   }
@@ -195,7 +191,7 @@ export class ViopAdapter {
     const meta = onibusData.serviceMeta!;
     const seats = onibusData.seats;
 
-    // Campos base (preferimos dados “vivos” do /onibus)
+    // Campos base
     const origemNome = seats?.origem?.cidade || corrida.origem;
     const destinoNome = seats?.destino?.cidade || corrida.destino;
     const preco = this.safeNumber(meta.preco, corrida.preco);
@@ -205,16 +201,16 @@ export class ViopAdapter {
     const saida = meta.saida || corrida.horarioPartida;
     const chegada = meta.chegada || corrida.horarioChegada;
 
-    // Datas/hora ISO
+    // 🔥 CORREÇÃO: Datas/hora ISO
     const departureTime = this.combineDateTime(corrida.dataPartida || dataBusca, saida);
     const arrivalTime = this.combineDateTime(corrida.dataPartida || dataBusca, chegada);
 
     // Duração em minutos
     const duracaoMin = corrida.duracao
       ? this.parseDurationToMinutes(corrida.duracao)
-      : this.calculateDurationFromTimes(saida, chegada);
+      : this.calculateDurationFromTimes(departureTime, arrivalTime);
 
-    // Dados brutos (ViopTrip) para debugging ou downstream
+    // Dados brutos
     const viopTrip: ViopTrip = {
       id: corrida.id,
       origem: origemNome,
@@ -229,7 +225,7 @@ export class ViopAdapter {
       servicos: [],
     };
 
-    // URL correta para fluxo VIOP: página de assentos
+    // URL para fluxo VIOP
     const bookingParams = new URLSearchParams({
       servico: servicoId,
       origem: origemId,
@@ -240,73 +236,68 @@ export class ViopAdapter {
     return {
       id: `viop-${corrida.id}`,
       provider: 'viop',
-
       departureCity: origemNome,
       departureCityCode: origemId,
       arrivalCity: destinoNome,
       arrivalCityCode: destinoId,
-
       departureTime,
       arrivalTime,
       duration: duracaoMin,
-
       carrier: empresa || 'Viação Ouro e Prata',
       carrierLogo: '/logos/viop-logo.png',
-
       price: preco,
       currency: 'BRL',
-
       availableSeats: assentos,
       busType: classe,
       amenities: [],
-
       bookingUrl: `/buscar-viop/assentos?${bookingParams.toString()}`,
       rawData: viopTrip,
     };
   }
 
   /** Helpers */
-
   private safeNumber(primary?: number, fallback?: number): number {
     const p = typeof primary === 'number' && !Number.isNaN(primary) ? primary : undefined;
     const f = typeof fallback === 'number' && !Number.isNaN(fallback) ? fallback : undefined;
     return (p ?? f ?? 0);
   }
 
+  /**
+   * 🔥 CORRIGIDO: Aceita "YYYY-MM-DD HH:MM:SS" ou "HH:MM"
+   */
   private combineDateTime(date: string, time: string): string {
-    if (!date || !time || time === '--:--') {
+    if (!time || time === '--:--') {
       return new Date().toISOString();
     }
-    const hhmm = time.length > 5 ? time.slice(0, 5) : time; // normaliza "HH:MM"
-    // Mantém como UTC ISO simples; ajuste de timezone/fuso pode ser feito onde renderizar
+    
+    // Se time já vem no formato "YYYY-MM-DD HH:MM:SS" ou "YYYY-MM-DD HH:MM"
+    if (time.includes(' ')) {
+      const [datePart, timePart] = time.split(' ');
+      const hhmm = timePart.length > 5 ? timePart.slice(0, 5) : timePart;
+      return `${datePart}T${hhmm}:00.000Z`;
+    }
+    
+    // Formato antigo: apenas "HH:MM"
+    if (!date) {
+      return new Date().toISOString();
+    }
+    const hhmm = time.length > 5 ? time.slice(0, 5) : time;
     return `${date}T${hhmm}:00.000Z`;
-    // Alternativa local-aware (se for necessário no futuro):
-    // const [h, m] = hhmm.split(':').map(Number);
-    // const d = new Date(date + 'T00:00:00');
-    // d.setHours(h, m, 0, 0);
-    // return d.toISOString();
   }
 
   /**
-   * Calcula duração em minutos a partir de horários HH:MM
+   * Calcula duração em minutos entre duas datas ISO
    */
-  private calculateDurationFromTimes(saida: string, chegada: string): number {
-    if (!saida || !chegada || saida === '--:--' || chegada === '--:--') {
+  private calculateDurationFromTimes(departureISO: string, arrivalISO: string): number {
+    try {
+      const dep = new Date(departureISO);
+      const arr = new Date(arrivalISO);
+      if (isNaN(dep.getTime()) || isNaN(arr.getTime())) return 0;
+      
+      const diffMs = arr.getTime() - dep.getTime();
+      return Math.max(0, Math.floor(diffMs / 60000));
+    } catch {
       return 0;
-    }
-    const [sh, sm] = saídaEMinutos(saida);
-    const [ch, cm] = saídaEMinutos(chegada);
-
-    if (sh === null || sm === null || ch === null || cm === null) return 0;
-
-    let total = ch * 60 + cm - (sh * 60 + sm);
-    if (total < 0) total += 24 * 60; // passou da meia-noite
-    return total;
-
-    function saídaEMinutos(hhmm: string): [number | null, number | null] {
-      const [h, m] = hhmm.split(':').map((v) => Number(v));
-      if (Number.isNaN(h) || Number.isNaN(m)) return [null, null];
-      return [h, m];
     }
   }
 
@@ -323,7 +314,6 @@ export class ViopAdapter {
   }
 
   /** -------- Autocomplete -------- */
-
   async searchCities(query: string): Promise<ViopCity[]> {
     try {
       const baseUrl = this.getBaseUrl();

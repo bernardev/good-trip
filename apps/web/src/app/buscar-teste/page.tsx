@@ -2,6 +2,7 @@
 'use client'
 
 import { UnifiedTripSearchV2 } from '@/components/UnifiedTripSearchV2';
+import BackButton from '@/components/ui/BackButton'
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { Bus, Sparkles } from 'lucide-react';
@@ -41,7 +42,12 @@ function BuscarTesteContent() {
       {/* Header Premium */}
       <div className="bg-gradient-to-r from-blue-600 to-sky-600 text-white py-8 md:py-12 shadow-xl">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-center gap-4 mb-4">
+<div className="relative flex items-center justify-center gap-4 mb-4">
+
+  {/* BOTÃO DE VOLTAR */}
+  <div className="absolute left-0 top-1/2 -translate-y-1/2">
+    <BackButton fallbackUrl="/" label="Voltar" />
+  </div>
             <div className="relative p-4 bg-white/20 backdrop-blur-sm rounded-2xl shadow-lg">
               <Bus className="w-10 h-10 md:w-12 md:h-12 text-white" />
               <Sparkles className="absolute -top-1 -right-1 w-5 h-5 md:w-6 md:h-6 text-yellow-400 animate-pulse" />

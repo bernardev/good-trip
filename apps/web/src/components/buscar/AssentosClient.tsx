@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 import { Armchair, Users, DollarSign, CheckCircle2, XCircle, Bus, Navigation } from 'lucide-react';
 
 type Poltrona = {
@@ -31,6 +32,7 @@ type Props = {
   query: Query;
   maxSelect?: number;
 };
+
 
 export default function AssentosClient({ poltronas, meta, query, maxSelect = 5 }: Props) {
   const router = useRouter();
@@ -98,9 +100,34 @@ export default function AssentosClient({ poltronas, meta, query, maxSelect = 5 }
     router.push(`/buscar-viop/pre-compra?${params.toString()}`);
   };
 
+  const handleBack = () => {
+  if (window.history.length > 1) {
+    router.back();
+  } else {
+    router.push('/buscar-viop');
+  }
+};
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 py-6">
       <div className="container mx-auto px-4 max-w-7xl">
+        <div className="mb-6 flex justify-start">
+  <button
+    onClick={handleBack}
+    className="
+      inline-flex items-center gap-2
+      px-5 py-2.5 rounded-xl
+      bg-white border border-slate-200
+      text-slate-700 font-semibold
+      shadow-sm
+      hover:bg-slate-50 hover:shadow-md
+      transition-all
+    "
+  >
+    <ArrowLeft className="w-4 h-4" />
+    Voltar
+  </button>
+</div>
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Selecione seus Assentos</h1>

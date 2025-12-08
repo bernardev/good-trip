@@ -1,11 +1,15 @@
 // apps/web/src/app/components/search/HomeSearchWidget.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { Calendar, MapPin, ArrowRight, Bus, Sparkles } from 'lucide-react'
 import { ViopCitiesResponse } from '@/types/unified-trip'
+
+type InputWithPicker = HTMLInputElement & {
+  showPicker?: () => void
+}
 
 interface CityOption {
   nome: string
@@ -41,6 +45,28 @@ export default function HomeSearchWidget() {
     format(new Date(), 'yyyy-MM-dd')
   )
   const [returnDate, setReturnDate] = useState<string>('')
+
+  // 🔥 NOVO: Refs para os inputs de data
+  const departureDateRef = useRef<HTMLInputElement>(null)
+  const returnDateRef = useRef<HTMLInputElement>(null)
+
+  // 🔥 NOVO: Função para abrir o calendário (funciona em todos os navegadores)
+const openDatePicker = (inputRef: React.RefObject<HTMLInputElement | null>) => {
+  const input = inputRef.current as InputWithPicker | null
+  if (!input) return
+
+  try {
+    if (typeof input.showPicker === 'function') {
+      input.showPicker()
+    } else {
+      input.focus()
+      input.click()
+    }
+  } catch {
+    input.focus()
+    input.click()
+  }
+}
 
   // ========== FUNÇÕES DE FORMATAÇÃO ==========
   const parseViopCityName = (name: string): { cidade: string; estado: string } => {
@@ -342,21 +368,29 @@ export default function HomeSearchWidget() {
             </div>
           </div>
 
-          {/* Linha 2: Datas */}
+          {/* Linha 2: Datas - 🔥 MELHORADO */}
           <div className={`grid ${tripType === 'roundtrip' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'} gap-3`}>
             {/* Data de Ida */}
             <div className="relative">
-              <label className="block text-xs font-bold text-blue-700 mb-2 ml-1">
+              <label 
+                className="block text-xs font-bold text-blue-700 mb-2 ml-1 cursor-pointer"
+                onClick={() => openDatePicker(departureDateRef)}
+              >
                 📅 Data de Ida
               </label>
-              <div className="relative">
-                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-500 z-10" />
+              <div 
+                className="relative cursor-pointer group"
+                onClick={() => openDatePicker(departureDateRef)}
+              >
+                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-500 z-10 pointer-events-none group-hover:scale-110 transition-transform" />
                 <input
+                  ref={departureDateRef}
                   type="date"
                   value={departureDate}
                   onChange={(e) => setDepartureDate(e.target.value)}
                   min={format(new Date(), 'yyyy-MM-dd')}
-                  className="w-full pl-12 pr-4 py-4 border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all bg-white hover:border-blue-300 font-medium text-gray-800"
+                  className="w-full pl-12 pr-4 py-4 border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all bg-white hover:border-blue-300 font-medium text-gray-800 cursor-pointer"
+                  required
                 />
               </div>
             </div>
@@ -364,17 +398,25 @@ export default function HomeSearchWidget() {
             {/* Data de Volta */}
             {tripType === 'roundtrip' && (
               <div className="relative">
-                <label className="block text-xs font-bold text-blue-700 mb-2 ml-1">
+                <label 
+                  className="block text-xs font-bold text-blue-700 mb-2 ml-1 cursor-pointer"
+                  onClick={() => openDatePicker(returnDateRef)}
+                >
                   🔙 Data de Volta
                 </label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-500 z-10" />
+                <div 
+                  className="relative cursor-pointer group"
+                  onClick={() => openDatePicker(returnDateRef)}
+                >
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-500 z-10 pointer-events-none group-hover:scale-110 transition-transform" />
                   <input
+                    ref={returnDateRef}
                     type="date"
                     value={returnDate}
                     onChange={(e) => setReturnDate(e.target.value)}
                     min={departureDate}
-                    className="w-full pl-12 pr-4 py-4 border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all bg-white hover:border-blue-300 font-medium text-gray-800"
+                    className="w-full pl-12 pr-4 py-4 border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all bg-white hover:border-blue-300 font-medium text-gray-800 cursor-pointer"
+                    required
                   />
                 </div>
               </div>

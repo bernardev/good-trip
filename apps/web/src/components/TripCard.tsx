@@ -40,13 +40,6 @@ export function TripCard({ trip, onSelect }: TripCardProps) {
     <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
-          {trip.carrierLogo && (
-            <img
-              src={trip.carrierLogo}
-              alt={trip.carrier}
-              className="w-12 h-12 object-contain"
-            />
-          )}
           <div>
             <h3 className="font-semibold text-lg">{trip.carrier}</h3>
             <span

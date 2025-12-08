@@ -9,7 +9,7 @@ function PixContent() {
   const sp = useSearchParams();
   const router = useRouter();
   const [copied, setCopied] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(1800);
+  const [timeLeft, setTimeLeft] = useState(600);
   const [checking, setChecking] = useState(false);
 
   const orderId = sp.get('order_id');

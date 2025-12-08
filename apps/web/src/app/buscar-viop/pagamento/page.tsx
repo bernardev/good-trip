@@ -1,16 +1,42 @@
+// apps/web/src/app/buscar-viop/pagamento/page.tsx
 'use client';
 
 import { Suspense } from 'react';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CreditCard, QrCode, Mail, Bus, Clock, Lock, Shield, CheckCircle2, AlertCircle } from 'lucide-react';
 
 type Query = {
-  servico?: string; origem?: string; destino?: string; data?: string; assentos?: string;
-  nome?: string; sobrenome?: string; docTipo?: 'CPF'|'RG'|'PASSAPORTE'; docNumero?: string; email?: string;
+  servico?: string; 
+  origem?: string; 
+  destino?: string; 
+  data?: string; 
+  assentos?: string;
+  nome?: string; 
+  sobrenome?: string; 
+  docTipo?: 'CPF'|'RG'|'PASSAPORTE'; 
+  docNumero?: string; 
+  email?: string;
+  preco?: string; // 🔥 Adicionado
 };
 
 type PaymentMethod = 'credit_card' | 'pix';
+
+// 🔥 NOVO: Type para resposta da API
+type ApiOnibusRes = {
+  ok: boolean;
+  serviceMeta?: {
+    preco?: number;
+    empresa?: string;
+    classe?: string;
+    saida?: string;
+    chegada?: string;
+  };
+  seats?: {
+    origem?: { cidade?: string; id?: number };
+    destino?: { cidade?: string; id?: number };
+  };
+};
 
 function PagamentoContent() {
   const sp = useSearchParams();
@@ -18,6 +44,12 @@ function PagamentoContent() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('credit_card');
+
+  // 🔥 NOVO: Estados para dados da viagem
+  const [origemNome, setOrigemNome] = useState<string>('');
+  const [destinoNome, setDestinoNome] = useState<string>('');
+  const [precoReal, setPrecoReal] = useState<number | null>(null);
+  const [loadingViagem, setLoadingViagem] = useState(true);
 
   // Dados do formulário de cartão
   const [cardNumber, setCardNumber] = useState('');
@@ -36,19 +68,87 @@ function PagamentoContent() {
     sobrenome: sp.get('sobrenome') ?? undefined,
     docTipo: (sp.get('docTipo') as Query['docTipo']) ?? 'CPF',
     docNumero: sp.get('docNumero') ?? undefined,
-    email: sp.get('email') ?? undefined
+    email: sp.get('email') ?? undefined,
+    preco: sp.get('preco') ?? undefined, // 🔥 Adicionado
   }), [sp]);
 
-  const title = useMemo(() => {
-    const o = q.origem ?? 'Origem';
-    const d = q.destino ?? 'Destino';
-    return `Passagem ${o} → ${d}`;
-  }, [q.origem, q.destino]);
+  // 🔥 NOVO: Buscar dados da viagem (nomes das cidades e preço correto)
+  useEffect(() => {
+    async function fetchViagemData() {
+      if (!q.servico || !q.origem || !q.destino || !q.data) {
+        setLoadingViagem(false);
+        return;
+      }
 
+      try {
+        const url = new URL('/api/viop/onibus', window.location.origin);
+        url.searchParams.set('servico', q.servico);
+        url.searchParams.set('origemId', q.origem);
+        url.searchParams.set('destinoId', q.destino);
+        url.searchParams.set('data', q.data);
+
+        const res = await fetch(url, { cache: 'no-store' });
+        
+        if (res.ok) {
+          const json: ApiOnibusRes = await res.json();
+          
+          // Pega os nomes das cidades
+          setOrigemNome(json?.seats?.origem?.cidade || q.origem || '');
+          setDestinoNome(json?.seats?.destino?.cidade || q.destino || '');
+          
+          // Pega o preço correto (prioriza o da URL, depois da API)
+          const precoFromUrl = q.preco ? Number(q.preco) : null;
+          const precoFromApi = json?.serviceMeta?.preco;
+          setPrecoReal(precoFromUrl || precoFromApi || null);
+        } else {
+          // Se API falhar, usa valores da URL
+          setOrigemNome(q.origem || '');
+          setDestinoNome(q.destino || '');
+          setPrecoReal(q.preco ? Number(q.preco) : null);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados da viagem:', error);
+        // Fallback para valores da URL
+        setOrigemNome(q.origem || '');
+        setDestinoNome(q.destino || '');
+        setPrecoReal(q.preco ? Number(q.preco) : null);
+      } finally {
+        setLoadingViagem(false);
+      }
+    }
+
+    fetchViagemData();
+  }, [q.servico, q.origem, q.destino, q.data, q.preco]);
+
+  const title = useMemo(() => {
+    const o = origemNome || q.origem || 'Origem';
+    const d = destinoNome || q.destino || 'Destino';
+    return `Passagem ${o} → ${d}`;
+  }, [origemNome, destinoNome, q.origem, q.destino]);
+
+  // 🔥 CORRIGIDO: Usar preço real em vez de fixo
   const total = useMemo<number>(() => {
-    const t = Number(sp.get('total'));
-    return Number.isFinite(t) && t > 0 ? t : 89.70;
-  }, [sp]);
+    if (precoReal && precoReal > 0) {
+      // Multiplica pelo número de assentos
+      const numAssentos = q.assentos ? q.assentos.split(',').filter(Boolean).length : 1;
+      return precoReal * numAssentos;
+    }
+    // Fallback apenas se não tiver preço nenhum
+    return 89.70;
+  }, [precoReal, q.assentos]);
+
+  // 🔥 NOVO: Formatar data
+  const dataFormatada = useMemo(() => {
+    if (!q.data) return '—';
+    const [y, m, d] = q.data.split('-').map(Number);
+    if (!y || !m || !d) return q.data;
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString('pt-BR', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
+    });
+  }, [q.data]);
 
   const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\s/g, '');
@@ -202,6 +302,18 @@ function PagamentoContent() {
     paymentMethod, cardNumber, cardName, cardExpiry, cardCvv, 
     installments, total, q, title, router
   ]);
+
+  // 🔥 NOVO: Loading enquanto busca dados da viagem
+  if (loadingViagem) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 font-semibold">Carregando informações da viagem...</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 py-10">
@@ -454,7 +566,7 @@ function PagamentoContent() {
                   <div className="flex-1">
                     <p className="font-semibold text-slate-900">{title}</p>
                     <div className="mt-2 space-y-1 text-sm text-slate-600">
-                      <p>📅 {q.data ?? '—'}</p>
+                      <p>📅 {dataFormatada}</p>
                       <p>💺 Assentos: {q.assentos ?? '—'}</p>
                       <p>🎫 Serviço: {q.servico ?? '—'}</p>
                     </div>
@@ -523,7 +635,7 @@ function PagamentoContent() {
               <Clock className="w-5 h-5 text-amber-600" />
               <div>
                 <p className="text-sm font-semibold text-amber-900">Sessão expira em</p>
-                <p className="text-xs text-amber-700">39:21 minutos</p>
+                <p className="text-xs text-amber-700">10:00 minutos</p>
               </div>
             </div>
           </div>

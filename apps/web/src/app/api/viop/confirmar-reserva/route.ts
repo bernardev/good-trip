@@ -6,7 +6,7 @@ const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
 const AUTH = "Basic R09PRFRSSVBBUEk6QGcxdDIj";
 
-const MODO_TESTE = true;
+const MODO_TESTE = false;
 
 type ReservaData = {
   servico: string;

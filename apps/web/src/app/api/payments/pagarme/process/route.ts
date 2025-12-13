@@ -1,7 +1,6 @@
 // app/api/payments/pagarme/process/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
+import { kv } from '@vercel/kv';
 
 const PAGARME_SECRET_KEY = process.env.PAGARME_SECRET_KEY || '';
 const PAGARME_API_URL = 'https://api.pagar.me/core/v5';
@@ -28,18 +27,13 @@ interface ReservaData {
   metadata?: Record<string, unknown>;
 }
 
-// 🔥 NOVO: Salvar dados da reserva em arquivo
+// 🔥 Salvar dados da reserva no Vercel KV
 async function salvarDadosReserva(orderId: string, data: ReservaData) {
   try {
-    const dir = join(process.cwd(), '.cache', 'reservas');
-    await mkdir(dir, { recursive: true });
-    
-    const filepath = join(dir, `${orderId}.json`);
-    await writeFile(filepath, JSON.stringify(data, null, 2));
-    
-    console.log('💾 Dados da reserva salvos:', orderId);
+    await kv.set(`reserva:${orderId}`, JSON.stringify(data), { ex: 3600 }); // Expira em 1 hora
+    console.log('💾 Dados salvos no KV:', orderId);
   } catch (error) {
-    console.error('❌ Erro ao salvar reserva:', error);
+    console.error('❌ Erro ao salvar no KV:', error);
   }
 }
 
@@ -66,8 +60,8 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // 🔥 NOVO: Preparar dados da reserva para salvar
-    const reservaData = {
+    // 🔥 Preparar dados da reserva para salvar
+    const reservaData: ReservaData = {
       servico: booking?.servico,
       origem: booking?.origem,
       destino: booking?.destino,

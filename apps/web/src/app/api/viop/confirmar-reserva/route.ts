@@ -1,7 +1,6 @@
 // apps/web/src/app/api/viop/confirmar-reserva/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { kv } from '@vercel/kv';
 
 const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
@@ -259,20 +258,27 @@ async function confirmarVenda(reserva: ReservaData, bloqueioResponse: BloqueioRe
   return response;
 }
 
-// Buscar dados salvos
+// 🔥 Buscar dados salvos do Vercel KV
 async function buscarDadosReserva(orderId: string): Promise<ReservaData | null> {
   try {
-    const filepath = join(process.cwd(), '.cache', 'reservas', `${orderId}.json`);
-    const content = await readFile(filepath, 'utf-8');
-    return JSON.parse(content) as ReservaData;
+    const data = await kv.get(`reserva:${orderId}`);
+    if (!data) {
+      console.error('❌ Reserva não encontrada no KV:', orderId);
+      return null;
+    }
+    const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+    console.log('✅ Dados da reserva recuperados do KV:', orderId);
+    return parsed as ReservaData;
   } catch (error) {
-    console.error('❌ Erro ao buscar reserva:', error);
+    console.error('❌ Erro ao buscar reserva do KV:', error);
     return null;
   }
 }
 
 // Funções auxiliares
-function calcularDuracao(saida: string, chegada: string): string {
+function calcularDuracao(saida?: string, chegada?: string): string {
+  if (!saida || !chegada) return '—';
+  
   try {
     const [dataSaida, horaSaida] = saida.split(' ');
     const [dataChegada, horaChegada] = chegada.split(' ');
@@ -290,7 +296,9 @@ function calcularDuracao(saida: string, chegada: string): string {
   }
 }
 
-function getClasseNome(classeId: number): string {
+function getClasseNome(classeId?: number): string {
+  if (!classeId) return 'CONVENCIONAL';
+  
   const classes: Record<number, string> = {
     17: 'LEITO',
     1: 'CONVENCIONAL',

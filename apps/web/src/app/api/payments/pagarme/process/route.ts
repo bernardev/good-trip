@@ -1,18 +1,47 @@
 // app/api/payments/pagarme/process/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
 
-// ⚠️ IMPORTANTE: Substitua pela sua chave secreta quando obtê-la
 const PAGARME_SECRET_KEY = process.env.PAGARME_SECRET_KEY || '';
 const PAGARME_API_URL = 'https://api.pagar.me/core/v5';
-
-// Verificar se está em modo simulação
 const isSimulationMode = !PAGARME_SECRET_KEY || PAGARME_SECRET_KEY.length < 10;
 
-// Criar autenticação Basic (Base64)
 const getAuthHeader = () => {
   const auth = Buffer.from(`${PAGARME_SECRET_KEY}:`).toString('base64');
   return `Basic ${auth}`;
 };
+
+interface ReservaData {
+  servico?: string;
+  origem?: string;
+  destino?: string;
+  data?: string;
+  assentos: string[];
+  passageiro: {
+    nome: string;
+    sobrenome: string;
+    documento?: string;
+    email: string;
+  };
+  preco: number;
+  metadata?: Record<string, unknown>;
+}
+
+// 🔥 NOVO: Salvar dados da reserva em arquivo
+async function salvarDadosReserva(orderId: string, data: ReservaData) {
+  try {
+    const dir = join(process.cwd(), '.cache', 'reservas');
+    await mkdir(dir, { recursive: true });
+    
+    const filepath = join(dir, `${orderId}.json`);
+    await writeFile(filepath, JSON.stringify(data, null, 2));
+    
+    console.log('💾 Dados da reserva salvos:', orderId);
+  } catch (error) {
+    console.error('❌ Erro ao salvar reserva:', error);
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,13 +59,35 @@ export async function POST(request: NextRequest) {
       installments 
     } = body;
 
-    // Validações básicas
     if (!payment_method || !amount || !customer) {
       return NextResponse.json({
         success: false,
         message: 'Dados obrigatórios faltando'
       }, { status: 400 });
     }
+
+    // 🔥 NOVO: Preparar dados da reserva para salvar
+    const reservaData = {
+      servico: booking?.servico,
+      origem: booking?.origem,
+      destino: booking?.destino,
+      data: booking?.data,
+      assentos: booking?.assentos || [],
+      passageiro: {
+        nome: customer.name?.split(' ')[0] || '',
+        sobrenome: customer.name?.split(' ').slice(1).join(' ') || '',
+        documento: customer.document?.replace(/\D/g, ''),
+        email: customer.email,
+      },
+      preco: amount / 100,
+      metadata,
+    };
+
+    console.log('📦 Dados da reserva preparados:', {
+      servico: reservaData.servico,
+      assentos: reservaData.assentos,
+      passageiro: reservaData.passageiro.email
+    });
 
     // ========== MODO SIMULAÇÃO ==========
     if (isSimulationMode) {
@@ -48,12 +99,9 @@ export async function POST(request: NextRequest) {
         installments
       }, null, 2));
 
-      // Simular delay de processamento
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Simular sucesso baseado no CVV (se for cartão)
       if (payment_method === 'credit_card') {
-        // CVV começando com 6 = recusa
         if (card_cvv && card_cvv.startsWith('6')) {
           return NextResponse.json({
             success: false,
@@ -62,10 +110,14 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // Sucesso
+        const orderId = `sim_order_${Date.now()}`;
+        
+        // 🔥 SALVAR dados da reserva
+        await salvarDadosReserva(orderId, reservaData);
+
         return NextResponse.json({
           success: true,
-          order_id: `sim_order_${Date.now()}`,
+          order_id: orderId,
           charge_id: `sim_charge_${Date.now()}`,
           status: 'paid',
           message: '✅ Pagamento simulado com sucesso! (Configure PAGARME_SECRET_KEY no .env.local para processar pagamentos reais)',
@@ -73,11 +125,15 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // PIX
       if (payment_method === 'pix') {
+        const orderId = `sim_pix_order_${Date.now()}`;
+        
+        // 🔥 SALVAR dados da reserva
+        await salvarDadosReserva(orderId, reservaData);
+
         return NextResponse.json({
           success: true,
-          order_id: `sim_pix_order_${Date.now()}`,
+          order_id: orderId,
           charge_id: `sim_pix_charge_${Date.now()}`,
           qr_code: 'SIMULADO_QR_CODE_' + Math.random().toString(36).substring(7).toUpperCase(),
           qr_code_url: 'https://exemplo.com/qr-code-simulado.png',
@@ -88,9 +144,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ========== MODO REAL (COM CHAVE SECRETA) ==========
+    // ========== MODO REAL ==========
 
-    // Preparar dados do cliente
     const customerData = {
       name: customer.name,
       email: customer.email,
@@ -106,7 +161,6 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    // Preparar itens
     const items = [{
       amount: amount,
       description: metadata?.title || 'Passagem de ônibus',
@@ -114,11 +168,6 @@ export async function POST(request: NextRequest) {
     }];
 
     if (payment_method === 'credit_card') {
-      // ========== PAGAMENTO COM CARTÃO (REAL) ==========
-      
-      // IMPORTANTE: Em produção, você deve tokenizar o cartão no frontend
-      // e enviar apenas o card_hash. Nunca envie dados abertos de cartão.
-      
       const orderData = {
         items,
         customer: customerData,
@@ -177,8 +226,8 @@ export async function POST(request: NextRequest) {
 
       console.log('✅ Resposta da Pagar.me:', { order_id: order.id, status });
 
-      // TODO: Aqui você deve salvar no banco de dados
-      // await saveOrderToDatabase(order, booking);
+      // 🔥 SALVAR dados da reserva
+      await salvarDadosReserva(order.id, reservaData);
 
       if (status === 'paid') {
         return NextResponse.json({
@@ -208,15 +257,13 @@ export async function POST(request: NextRequest) {
       }
 
     } else if (payment_method === 'pix') {
-      // ========== PAGAMENTO COM PIX (REAL) ==========
-      
       const orderData = {
         items,
         customer: customerData,
         payments: [{
           payment_method: 'pix',
           pix: {
-            expires_in: 1800 // 30 minutos
+            expires_in: 1800
           }
         }],
         metadata: {
@@ -251,11 +298,8 @@ export async function POST(request: NextRequest) {
       const charge = order.charges[0];
       const lastTransaction = charge.last_transaction;
 
-      // Log completo para debug
       console.log('✅ PIX gerado:', order.id);
-      console.log('📋 Estrutura da transação:', JSON.stringify(lastTransaction, null, 2));
 
-      // Tentar pegar o QR Code de diferentes lugares (API pode variar)
       const qrCode = lastTransaction?.qr_code || 
                      lastTransaction?.pix?.qr_code || 
                      lastTransaction?.qr_code_data ||
@@ -267,15 +311,8 @@ export async function POST(request: NextRequest) {
                         charge?.qr_code_url ||
                         '';
 
-      console.log('🔍 QR Code extraído:', qrCode?.substring(0, 50) + '...');
-
-      if (qrCode === 'QR_CODE_NOT_FOUND') {
-        console.error('⚠️ QR Code não encontrado na resposta!');
-        console.error('Resposta completa:', JSON.stringify(order, null, 2));
-      }
-
-      // TODO: Aqui você deve salvar no banco de dados
-      // await saveOrderToDatabase(order, booking);
+      // 🔥 SALVAR dados da reserva
+      await salvarDadosReserva(order.id, reservaData);
 
       return NextResponse.json({
         success: true,

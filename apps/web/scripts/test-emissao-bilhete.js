@@ -9,18 +9,18 @@ console.log('🧪 TESTE DE EMISSÃO DE BILHETE - SEM PAGAMENTO REAL\n');
 // 1️⃣ Simular dados de uma reserva
 const orderId = `test_${Date.now()}`;
 const reservaData = {
-  servico: "1085",  // ← TROQUE pelo número do serviço que aparece nos resultados
+  servico: "101431",  // ← TROQUE pelo número do serviço que aparece nos resultados
   origem: "12722",
   destino: "18697",
   data: "2025-12-15",
-  assentos: ["19"],
+  assentos: ["12"],
   passageiro: {
     nome: "Eduardo",
     sobrenome: "Teste",
     documento: "10390289930",
     email: "ehbernardes09@gmail.com"
   },
-  preco: 249.98,
+  preco: 118.99,
 };
 
 console.log('📦 Dados da reserva:');

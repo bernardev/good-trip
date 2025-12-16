@@ -218,8 +218,7 @@ async function confirmarVenda(reserva: ReservaData, bloqueioResponse: BloqueioRe
     tipoDocumentoPassageiro: "CPF",
     email: reserva.passageiro.email,
     telefone: "41999999999",
-    
-    // 🔥 CAMPOS VINDOS DO BLOQUEIO (CRÍTICOS!)
+    idFormaPagamento: 1,
     numOperacion: bloqueioResponse.numOperacion,
     localizador: bloqueioResponse.localizador,
     

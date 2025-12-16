@@ -17,12 +17,11 @@ type Query = {
   docTipo?: 'CPF'|'RG'|'PASSAPORTE'; 
   docNumero?: string; 
   email?: string;
-  preco?: string; // 🔥 Adicionado
+  preco?: string;
 };
 
 type PaymentMethod = 'credit_card' | 'pix';
 
-// 🔥 NOVO: Type para resposta da API
 type ApiOnibusRes = {
   ok: boolean;
   serviceMeta?: {
@@ -45,13 +44,11 @@ function PagamentoContent() {
   const [err, setErr] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('credit_card');
 
-  // 🔥 NOVO: Estados para dados da viagem
   const [origemNome, setOrigemNome] = useState<string>('');
   const [destinoNome, setDestinoNome] = useState<string>('');
   const [precoReal, setPrecoReal] = useState<number | null>(null);
   const [loadingViagem, setLoadingViagem] = useState(true);
 
-  // Dados do formulário de cartão
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
@@ -69,10 +66,9 @@ function PagamentoContent() {
     docTipo: (sp.get('docTipo') as Query['docTipo']) ?? 'CPF',
     docNumero: sp.get('docNumero') ?? undefined,
     email: sp.get('email') ?? undefined,
-    preco: sp.get('preco') ?? undefined, // 🔥 Adicionado
+    preco: sp.get('preco') ?? undefined,
   }), [sp]);
 
-  // 🔥 NOVO: Buscar dados da viagem (nomes das cidades e preço correto)
   useEffect(() => {
     async function fetchViagemData() {
       if (!q.servico || !q.origem || !q.destino || !q.data) {
@@ -92,23 +88,19 @@ function PagamentoContent() {
         if (res.ok) {
           const json: ApiOnibusRes = await res.json();
           
-          // Pega os nomes das cidades
           setOrigemNome(json?.seats?.origem?.cidade || q.origem || '');
           setDestinoNome(json?.seats?.destino?.cidade || q.destino || '');
           
-          // Pega o preço correto (prioriza o da URL, depois da API)
           const precoFromUrl = q.preco ? Number(q.preco) : null;
           const precoFromApi = json?.serviceMeta?.preco;
           setPrecoReal(precoFromUrl || precoFromApi || null);
         } else {
-          // Se API falhar, usa valores da URL
           setOrigemNome(q.origem || '');
           setDestinoNome(q.destino || '');
           setPrecoReal(q.preco ? Number(q.preco) : null);
         }
       } catch (error) {
         console.error('Erro ao buscar dados da viagem:', error);
-        // Fallback para valores da URL
         setOrigemNome(q.origem || '');
         setDestinoNome(q.destino || '');
         setPrecoReal(q.preco ? Number(q.preco) : null);
@@ -126,18 +118,23 @@ function PagamentoContent() {
     return `Passagem ${o} → ${d}`;
   }, [origemNome, destinoNome, q.origem, q.destino]);
 
-  // 🔥 CORRIGIDO: Usar preço real em vez de fixo
-  const total = useMemo<number>(() => {
+  // 🔥 NOVO: Cálculo com taxa de serviço
+  const subtotal = useMemo<number>(() => {
     if (precoReal && precoReal > 0) {
-      // Multiplica pelo número de assentos
       const numAssentos = q.assentos ? q.assentos.split(',').filter(Boolean).length : 1;
       return precoReal * numAssentos;
     }
-    // Fallback apenas se não tiver preço nenhum
     return 89.70;
   }, [precoReal, q.assentos]);
 
-  // 🔥 NOVO: Formatar data
+  const taxaServico = useMemo<number>(() => {
+    return subtotal * 0.05; // 5% de taxa
+  }, [subtotal]);
+
+  const total = useMemo<number>(() => {
+    return subtotal + taxaServico;
+  }, [subtotal, taxaServico]);
+
   const dataFormatada = useMemo(() => {
     if (!q.data) return '—';
     const [y, m, d] = q.data.split('-').map(Number);
@@ -303,7 +300,6 @@ function PagamentoContent() {
     installments, total, q, title, router
   ]);
 
-  // 🔥 NOVO: Loading enquanto busca dados da viagem
   if (loadingViagem) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center">
@@ -586,17 +582,18 @@ function PagamentoContent() {
                 </div>
               </div>
 
+              {/* 🔥 RESUMO ATUALIZADO COM TAXA */}
               <div className="border-t border-slate-200 pt-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-slate-600">Subtotal</span>
-                  <span className="font-medium">R$ {total.toFixed(2)}</span>
+                  <span className="font-medium">R$ {subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center mb-4">
-                  <span className="text-slate-600">Taxas</span>
-                  <span className="font-medium text-green-600">R$ 0,00</span>
+                  <span className="text-slate-600">Taxa de serviço (5%)</span>
+                  <span className="font-medium text-blue-600">R$ {taxaServico.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between items-center pt-4 border-t border-slate-200">
-                  <span className="text-lg font-bold">Total</span>
+                <div className="flex justify-between items-center pt-4 border-t-2 border-slate-300">
+                  <span className="text-lg font-bold">Total a Pagar</span>
                   <span className="text-2xl font-bold text-blue-600">R$ {total.toFixed(2)}</span>
                 </div>
               </div>

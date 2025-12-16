@@ -1,0 +1,16 @@
+{
+  "servico": "101431",
+  "origem": "12722",
+  "destino": "18697",
+  "data": "2025-12-15",
+  "assentos": [
+    "12"
+  ],
+  "passageiro": {
+    "nome": "Eduardo",
+    "sobrenome": "Teste",
+    "documento": "10390289930",
+    "email": "ehbernardes09@gmail.com"
+  },
+  "preco": 118.99
+}

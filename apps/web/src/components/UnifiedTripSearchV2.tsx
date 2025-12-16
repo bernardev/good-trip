@@ -8,6 +8,23 @@ import type { UnifiedTrip, UnifiedSearchResult } from '@/types/unified-trip';
 import { SlidersHorizontal, Package, Sparkles, SearchX, Loader2 } from 'lucide-react';
 import { ViopAdapter } from '@/services/viop-adapter';
 
+function converterHorarioParaMinutos(horario: string): number {
+  if (!horario) return 0;
+  const [horas, minutos] = horario.split(':').slice(0, 2).map(Number);
+  if (isNaN(horas) || isNaN(minutos)) return 0;
+  return horas * 60 + minutos;
+}
+
+function ordenarViagensPorHorario(trips: UnifiedTrip[]): UnifiedTrip[] {
+  console.log('🔍 Primeira viagem:', trips[0]); // ADICIONE ESTA LINHA
+  return [...trips].sort((a, b) => {
+    const horarioA = a.departureTime?.split('T')[1] || '';
+    const horarioB = b.departureTime?.split('T')[1] || '';
+    console.log('⏰ Comparando:', horarioA, 'vs', horarioB); // ADICIONE ESTA LINHA
+    return converterHorarioParaMinutos(horarioA) - converterHorarioParaMinutos(horarioB);
+  });
+}
+
 interface AutoSearchParams {
   origem: string;
   destino: string;
@@ -71,22 +88,30 @@ export function UnifiedTripSearchV2({
           passengers: params.passengers,
         });
 
-        const result: UnifiedSearchResult = {
-          trips,
-          searchParams: params,
-          providers: {
-            distribusion: {
-              success: false,
-              count: 0,
-            },
-            viop: {
-              success: true,
-              count: trips.length,
-            },
-          },
-        };
+const tripsOrdenados = trips.sort((a, b) => {
+  const horarioA = a.departureTime?.split('T')[1]?.split(':').slice(0, 2).join(':') || '00:00';
+  const horarioB = b.departureTime?.split('T')[1]?.split(':').slice(0, 2).join(':') || '00:00';
+  const [horaA, minA] = horarioA.split(':').map(Number);
+  const [horaB, minB] = horarioB.split(':').map(Number);
+  return (horaA * 60 + minA) - (horaB * 60 + minB);
+});
 
-        setSearchResult(result);
+const result: UnifiedSearchResult = {
+  trips: tripsOrdenados,
+  searchParams: params,
+  providers: {
+    distribusion: {
+      success: false,
+      count: 0,
+    },
+    viop: {
+      success: true,
+      count: tripsOrdenados.length,
+    },
+  },
+};
+
+setSearchResult(result);
       } else {
         const response = await fetch('/api/search/unified', {
           method: 'POST',

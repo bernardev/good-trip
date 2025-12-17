@@ -3,6 +3,7 @@
 import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
+import QRCode from 'qrcode';
 import { QrCode, Copy, CheckCircle2, Clock, ArrowLeft, Smartphone } from 'lucide-react';
 
 function PixContent() {
@@ -11,10 +12,12 @@ function PixContent() {
   const [copied, setCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState(600);
   const [checking, setChecking] = useState(false);
+  const [qrCodeImage, setQrCodeImage] = useState<string | null>(null);
 
   const orderId = sp.get('order_id');
   const qrCode = sp.get('qr_code');
 
+  // ⏱️ Contador de tempo
   useEffect(() => {
     if (timeLeft <= 0) return;
     
@@ -25,6 +28,7 @@ function PixContent() {
     return () => clearInterval(timer);
   }, [timeLeft]);
 
+  // 🔄 Verifica pagamento
   useEffect(() => {
     if (!orderId) return;
 
@@ -51,6 +55,23 @@ function PixContent() {
     return () => clearInterval(interval);
   }, [orderId, router, checking]);
 
+  // 🖼️ GERA O QR CODE REAL
+  useEffect(() => {
+    if (!qrCode) return;
+
+    QRCode.toDataURL(qrCode, {
+      width: 256,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    })
+      .then(setQrCodeImage)
+      .catch(err => console.error('Erro ao gerar QR Code:', err));
+  }, [qrCode]);
+
+  // 📋 Copiar para área de transferência
   const copyToClipboard = useCallback(() => {
     if (!qrCode) return;
     
@@ -114,13 +135,20 @@ function PixContent() {
 
         <div className="rounded-2xl bg-white p-8 shadow-xl border border-slate-200 mb-6">
           <div className="bg-white p-8 rounded-xl border-4 border-slate-100 mb-6 flex items-center justify-center">
-            <div className="w-64 h-64 bg-slate-100 rounded-lg flex items-center justify-center">
-              <div className="text-center">
-                <QrCode className="w-32 h-32 text-slate-400 mx-auto mb-4" />
-                <p className="text-sm text-slate-500">QR Code gerado</p>
-                <p className="text-xs text-slate-400 mt-1">Use o código abaixo para Pix Copia e Cola</p>
+            {qrCodeImage ? (
+              <img
+                src={qrCodeImage}
+                alt="QR Code PIX"
+                className="w-64 h-64 rounded-lg"
+              />
+            ) : (
+              <div className="w-64 h-64 bg-slate-100 rounded-lg flex items-center justify-center">
+                <div className="text-center">
+                  <QrCode className="w-32 h-32 text-slate-400 mx-auto mb-4 animate-pulse" />
+                  <p className="text-sm text-slate-500">Gerando QR Code...</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div>

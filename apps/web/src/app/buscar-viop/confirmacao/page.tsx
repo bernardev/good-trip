@@ -137,14 +137,11 @@ function ConfirmacaoContent() {
   const qrCodePortao = reserva?.qrCode || reserva?.xmlBPE?.qrcode || '';
   const qrCodeBpe = reserva?.qrCodeBpe || reserva?.xmlBPE?.qrcodeBpe || '';
   
-  // Gerar QR Codes de teste se necessário
-  const isTeste = reserva?._teste || (!chaveBpe && !qrCodePortao && !qrCodeBpe);
-  const chaveBpeTeste = isTeste ? `SIMULADO_CHAVE_BPE_${reserva?.localizador || 'TESTE'}` : chaveBpe;
-  const qrCodePortaoTeste = isTeste ? `https://goodtrip.com.br/portao/${reserva?.localizador || 'TESTE'}` : qrCodePortao;
-  const qrCodeBpeTeste = isTeste ? `http://bpe.svrs.rs.gov.br/consulta?chave=${chaveBpeTeste}` : qrCodeBpe;
+  // 🔥 SÓ É TESTE SE _teste === true
+  const isTeste = reserva?._teste === true;
   
-  // Formatar chave BPe para código de barras (espaços a cada 4 dígitos)
-  const chaveBpeFormatada = (chaveBpeTeste || chaveBpe).match(/.{1,4}/g)?.join(' ') || (chaveBpeTeste || chaveBpe);
+  // Formatar chave BPe
+  const chaveBpeFormatada = chaveBpe ? chaveBpe.match(/.{1,4}/g)?.join(' ') || chaveBpe : '';
 
   // Success - Bilhete Eletrônico
   return (
@@ -165,7 +162,6 @@ function ConfirmacaoContent() {
             page-break-after: avoid;
             page-break-inside: avoid;
           }
-          /* Forçar tudo em 1 página */
           #bilhete-eletronico * {
             page-break-inside: avoid !important;
             page-break-after: avoid !important;
@@ -175,7 +171,6 @@ function ConfirmacaoContent() {
             margin: 0.5cm;
             size: A4 portrait;
           }
-          /* Reduzir tamanhos para caber em 1 página */
           #bilhete-eletronico {
             font-size: 11px !important;
             transform: scale(0.95);
@@ -246,6 +241,15 @@ function ConfirmacaoContent() {
             Imprimir Bilhete
           </button>
         </div>
+
+        {/* 🚨 AVISO SE FOR TESTE */}
+        {isTeste && (
+          <div className="max-w-4xl mx-auto mb-4 bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 no-print">
+            <p className="text-yellow-800 font-bold text-center">
+              ⚠️ ATENÇÃO: Este é um bilhete de TESTE. Não é válido para embarque.
+            </p>
+          </div>
+        )}
 
         {/* Bilhete Eletrônico */}
         <div id="bilhete-eletronico" className="max-w-4xl mx-auto bg-white shadow-xl border border-gray-300">
@@ -393,21 +397,16 @@ function ConfirmacaoContent() {
           </div>
 
           {/* CHAVE BPe E CÓDIGO DE BARRAS */}
-          {(chaveBpeTeste || chaveBpe) && (
+          {chaveBpe && (
             <div className="border-b-2 border-gray-300 p-6 text-center">
               <p className="text-xs text-gray-600 mb-2">Consulta pela Chave de Acesso em</p>
               <p className="text-xs text-blue-600 mb-3">http://bpe.svrs.rs.gov.br/consulta</p>
               <div className="font-mono text-lg font-bold tracking-wider text-gray-900 mb-3">
                 {chaveBpeFormatada}
               </div>
-              {isTeste && (
-                <div className="bg-yellow-50 border border-yellow-300 text-yellow-800 text-xs py-2 px-4 rounded mb-3">
-                  ⚠️ BILHETE DE TESTE - Chave simulada para visualização
-                </div>
-              )}
               {/* Área para código de barras */}
               <div className="h-20 bg-gray-100 flex items-center justify-center border border-gray-300">
-                <p className="text-xs text-gray-500">Código de Barras: {(chaveBpeTeste || chaveBpe).substring(0, 20)}...</p>
+                <p className="text-xs text-gray-500">Código de Barras: {chaveBpe.substring(0, 20)}...</p>
               </div>
             </div>
           )}
@@ -417,15 +416,15 @@ function ConfirmacaoContent() {
             <div className="grid grid-cols-2 gap-6">
               {/* QR Code Esquerda */}
               <div className="flex items-center justify-center">
-                {qrCodeBpeTeste || qrCodeBpe ? (
-                  isTeste ? (
-                    <QRCodeSVG value={qrCodeBpeTeste} size={192} level="M" />
-                  ) : (
+                {qrCodeBpe ? (
+                  qrCodeBpe.startsWith('http') ? (
                     <img src={qrCodeBpe} alt="QR Code BPe" className="w-48 h-48" />
+                  ) : (
+                    <QRCodeSVG value={qrCodeBpe} size={192} level="M" />
                   )
                 ) : (
                   <div className="w-48 h-48 bg-gray-100 border-2 border-gray-300 flex items-center justify-center">
-                    <p className="text-xs text-gray-500 text-center">QR Code BPe</p>
+                    <p className="text-xs text-gray-500 text-center">QR Code BPe<br/>não disponível</p>
                   </div>
                 )}
               </div>
@@ -476,20 +475,15 @@ function ConfirmacaoContent() {
 
           {/* QR CODE PORTÃO EMBARQUE */}
           <div className="border-b-2 border-gray-300 p-6 text-center">
-            {qrCodePortaoTeste || qrCodePortao ? (
-              isTeste ? (
-                <QRCodeSVG value={qrCodePortaoTeste} size={192} level="M" className="mx-auto mb-2" />
-              ) : (
+            {qrCodePortao ? (
+              qrCodePortao.startsWith('http') ? (
                 <img src={qrCodePortao} alt="Acesso Portão Embarque" className="w-48 h-48 mx-auto mb-2" />
+              ) : (
+                <QRCodeSVG value={qrCodePortao} size={192} level="M" className="mx-auto mb-2" />
               )
             ) : (
               <div className="w-48 h-48 bg-gray-100 border-2 border-gray-300 flex items-center justify-center mx-auto mb-2">
-                <p className="text-xs text-gray-500">QR Code Portão</p>
-              </div>
-            )}
-            {isTeste && (
-              <div className="bg-yellow-50 border border-yellow-300 text-yellow-800 text-xs py-2 px-4 rounded mb-2 inline-block">
-                ⚠️ QR Code de teste para visualização
+                <p className="text-xs text-gray-500">QR Code Portão<br/>não disponível</p>
               </div>
             )}
             <p className="font-bold text-gray-900">Acesso ao Portão de Embarque</p>

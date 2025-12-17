@@ -209,9 +209,7 @@ async function bloquearPoltrona(reserva: ReservaData) {
 async function confirmarVenda(reserva: ReservaData, bloqueioResponse: BloqueioResponse) {
   const url = `${VIOP_BASE}/confirmavenda/confirmarVenda`;
   
-  // 🔥 PAYLOAD COMPLETO COM TODOS OS CAMPOS NECESSÁRIOS
   const payload = {
-    // Campos básicos obrigatórios
     transacao: bloqueioResponse.transacao,
     nomePassageiro: `${reserva.passageiro.nome} ${reserva.passageiro.sobrenome}`,
     documentoPassageiro: reserva.passageiro.documento,
@@ -221,8 +219,6 @@ async function confirmarVenda(reserva: ReservaData, bloqueioResponse: BloqueioRe
     idFormaPagamento: 1,
     numOperacion: bloqueioResponse.numOperacion,
     localizador: bloqueioResponse.localizador,
-    
-    // Desconto (todos os campos são obrigatórios)
     descontoId: 0,
     totalDescontoAplicado: 0,
     valorDescontoOutros: 0,
@@ -254,10 +250,14 @@ async function confirmarVenda(reserva: ReservaData, bloqueioResponse: BloqueioRe
   const response = await res.json();
   console.log('✅ Resposta confirmarVenda:', response);
   
+  // 🔥 DEBUG DETALHADO - COPIAR ESTE JSON COMPLETO
+  console.log('=== INICIO DEBUG ===');
+  console.log(JSON.stringify(response, null, 2));
+  console.log('=== FIM DEBUG ===');
+  
   return response;
 }
 
-// 🔥 Buscar dados salvos do Vercel KV
 async function buscarDadosReserva(orderId: string): Promise<ReservaData | null> {
   try {
     const data = await kv.get(`reserva:${orderId}`);
@@ -274,7 +274,6 @@ async function buscarDadosReserva(orderId: string): Promise<ReservaData | null> 
   }
 }
 
-// Funções auxiliares
 function calcularDuracao(saida?: string, chegada?: string): string {
   if (!saida || !chegada) return '—';
   

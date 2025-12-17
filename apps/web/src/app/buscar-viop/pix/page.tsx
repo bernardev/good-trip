@@ -6,6 +6,10 @@ import { useState, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
 import { QrCode, Copy, CheckCircle2, Clock, ArrowLeft, Smartphone } from 'lucide-react';
 
+interface PaymentCheckResponse {
+  status: string;
+}
+
 function PixContent() {
   const sp = useSearchParams();
   const router = useRouter();
@@ -38,7 +42,7 @@ function PixContent() {
       setChecking(true);
       try {
         const res = await fetch(`/api/payments/pagarme/check?order_id=${orderId}`);
-        const data = await res.json();
+        const data = await res.json() as PaymentCheckResponse;
         
         if (data.status === 'paid') {
           router.push(`/buscar-viop/confirmacao?order_id=${orderId}&status=paid`);
@@ -68,7 +72,7 @@ function PixContent() {
       }
     })
       .then(setQrCodeImage)
-      .catch(err => console.error('Erro ao gerar QR Code:', err));
+      .catch((err: Error) => console.error('Erro ao gerar QR Code:', err));
   }, [qrCode]);
 
   // 📋 Copiar para área de transferência

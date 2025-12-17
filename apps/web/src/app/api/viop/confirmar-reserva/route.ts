@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
       },
       // 🔥 DADOS DO BPe (objeto bpe, não xmlBPE!)
       chaveBpe: confirmacao.bpe?.chaveBpe,
-      qrCode: confirmacao.bpe?.qrcode,
+      qrCode: confirmacao.bpe?.codigoMonitriipBPe,
       qrCodeBpe: confirmacao.bpe?.qrcodeBpe,
       tarifa: parseFloat(confirmacao.bpe?.tarifa || '0'),
       pedagio: parseFloat(confirmacao.bpe?.pedagio || '0'),

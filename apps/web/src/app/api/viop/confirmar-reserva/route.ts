@@ -147,10 +147,11 @@ export async function POST(req: NextRequest) {
         documento: confirmacao.documento,
         email: reservaData.passageiro.email,
       },
-      // 🔥 DADOS DO BPe (objeto bpe, não xmlBPE!)
+      // 🔥 DADOS DO BPe
       chaveBpe: confirmacao.bpe?.chaveBpe,
-      qrCode: confirmacao.bpe?.codigoMonitriipBPe,
-      qrCodeBpe: confirmacao.bpe?.qrcodeBpe,
+      qrCode: confirmacao.bpe?.codigoMonitriipBPe, // QR Code embarque ônibus
+      qrCodeBpe: confirmacao.bpe?.qrcodeBpe, // QR Code fiscal
+      qrCodeTaxaEmbarque: confirmacao.cupomTaxaEmbarque, // QR Code taxa embarque rodoviária
       tarifa: parseFloat(confirmacao.bpe?.tarifa || '0'),
       pedagio: parseFloat(confirmacao.bpe?.pedagio || '0'),
       taxaEmbarque: parseFloat(confirmacao.bpe?.taxaEmbarque || '0'),
@@ -256,6 +257,12 @@ async function confirmarVenda(reserva: ReservaData, bloqueioResponse: BloqueioRe
   }
 
   const response = await res.json();
+  
+  // 🔥 DEBUG COMPLETO - COPIAR ESTE JSON
+  console.log('=== RESPONSE COMPLETA ===');
+  console.log(JSON.stringify(response, null, 2));
+  console.log('=== FIM ===');
+  
   console.log('✅ Venda confirmada');
   
   return response;

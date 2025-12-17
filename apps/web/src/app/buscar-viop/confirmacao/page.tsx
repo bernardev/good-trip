@@ -36,8 +36,9 @@ type ReservaResult = {
     qrcode?: string;
     qrcodeBpe?: string;
   };
-  qrCode?: string;
-  qrCodeBpe?: string;
+  qrCode?: string; // QR Code embarque ônibus (Monitriip)
+  qrCodeBpe?: string; // QR Code fiscal
+  qrCodeTaxaEmbarque?: string; // QR Code taxa embarque rodoviária
   chaveBpe?: string;
   taxaEmbarque?: number;
   pedagio?: number;
@@ -132,10 +133,11 @@ function ConfirmacaoContent() {
     );
   }
 
-  // Extrair dados
+  // Extrair dados dos 3 QR Codes
   const chaveBpe = reserva?.chaveBpe || reserva?.xmlBPE?.chaveBpe || '';
-  const qrCodePortao = reserva?.qrCode || reserva?.xmlBPE?.qrcode || '';
-  const qrCodeBpe = reserva?.qrCodeBpe || reserva?.xmlBPE?.qrcodeBpe || '';
+  const qrCodeEmbarque = reserva?.qrCode || ''; // Monitriip - embarque no ônibus
+  const qrCodeBpe = reserva?.qrCodeBpe || reserva?.xmlBPE?.qrcodeBpe || ''; // Fiscal
+  const qrCodeTaxaEmbarque = reserva?.qrCodeTaxaEmbarque || ''; // Taxa embarque rodoviária
   
   // 🔥 SÓ É TESTE SE _teste === true
   const isTeste = reserva?._teste === true;
@@ -257,7 +259,6 @@ function ConfirmacaoContent() {
           {/* CABEÇALHO */}
           <div className="border-b-2 border-gray-300 p-6">
             <div className="flex items-start gap-6 mb-4">
-              {/* Logo */}
               <div className="flex-shrink-0">
                 <Image 
                   src="/logo-goodtrip.jpeg" 
@@ -268,7 +269,6 @@ function ConfirmacaoContent() {
                 />
               </div>
               
-              {/* Dados da empresa */}
               <div className="flex-1">
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">GOOD TRIP PASSAGENS LTDA</h1>
                 <p className="text-sm text-gray-700">CNPJ: 57.355.709/0001-27</p>
@@ -276,7 +276,6 @@ function ConfirmacaoContent() {
                 <p className="text-sm text-gray-700">Itaituba – PA, CEP 68180-010</p>
               </div>
               
-              {/* SAC */}
               <div className="text-right text-sm text-gray-600">
                 <p>SAC: (93) 99143-6570</p>
                 <p>suporte@goodtrip.com.br</p>
@@ -404,17 +403,15 @@ function ConfirmacaoContent() {
               <div className="font-mono text-lg font-bold tracking-wider text-gray-900 mb-3">
                 {chaveBpeFormatada}
               </div>
-              {/* Área para código de barras */}
               <div className="h-20 bg-gray-100 flex items-center justify-center border border-gray-300">
                 <p className="text-xs text-gray-500">Código de Barras: {chaveBpe.substring(0, 20)}...</p>
               </div>
             </div>
           )}
 
-          {/* DADOS PASSAGEIRO E QR CODE BPe */}
+          {/* DADOS PASSAGEIRO E QR CODE BPe FISCAL */}
           <div className="border-b-2 border-gray-300 p-6">
             <div className="grid grid-cols-2 gap-6">
-              {/* QR Code Esquerda */}
               <div className="flex items-center justify-center">
                 {qrCodeBpe ? (
                   qrCodeBpe.startsWith('http') ? (
@@ -429,7 +426,6 @@ function ConfirmacaoContent() {
                 )}
               </div>
 
-              {/* Dados Passageiro */}
               <div className="text-sm space-y-2">
                 <div>
                   <p className="text-gray-600">Passageiro(a)</p>
@@ -473,21 +469,27 @@ function ConfirmacaoContent() {
             </p>
           </div>
 
-          {/* QR CODE PORTÃO EMBARQUE */}
+          {/* QR CODE EMBARQUE ÔNIBUS (Monitriip) */}
           <div className="border-b-2 border-gray-300 p-6 text-center">
-            {qrCodePortao ? (
-              qrCodePortao.startsWith('http') ? (
-                <img src={qrCodePortao} alt="Acesso Portão Embarque" className="w-48 h-48 mx-auto mb-2" />
-              ) : (
-                <QRCodeSVG value={qrCodePortao} size={192} level="M" className="mx-auto mb-2" />
-              )
+            {qrCodeEmbarque ? (
+              <QRCodeSVG value={qrCodeEmbarque} size={192} level="M" className="mx-auto mb-2" />
             ) : (
               <div className="w-48 h-48 bg-gray-100 border-2 border-gray-300 flex items-center justify-center mx-auto mb-2">
-                <p className="text-xs text-gray-500">QR Code Portão<br/>não disponível</p>
+                <p className="text-xs text-gray-500">QR Code Embarque<br/>não disponível</p>
               </div>
             )}
-            <p className="font-bold text-gray-900">Acesso ao Portão de Embarque</p>
+            <p className="font-bold text-gray-900">Embarque no Ônibus</p>
+            <p className="text-xs text-gray-600 mt-1">Apresente este QR Code ao motorista</p>
           </div>
+
+          {/* QR CODE TAXA EMBARQUE (Rodoviária) */}
+          {qrCodeTaxaEmbarque && (
+            <div className="border-b-2 border-gray-300 p-6 text-center">
+              <QRCodeSVG value={qrCodeTaxaEmbarque} size={192} level="M" className="mx-auto mb-2" />
+              <p className="font-bold text-gray-900">Acesso à Área de Embarque</p>
+              <p className="text-xs text-gray-600 mt-1">Apresente este QR Code na catraca da rodoviária</p>
+            </div>
+          )}
 
           {/* ORIENTAÇÕES */}
           <div className="p-6">

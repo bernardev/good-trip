@@ -132,27 +132,35 @@ export async function POST(req: NextRequest) {
       poltrona: confirmacao.poltrona,
       servico: confirmacao.servico,
       total: reservaData.preco * reservaData.assentos.length,
-      origemNome: bloqueio.origem?.cidade || reservaData.origem,
-      destinoNome: bloqueio.destino?.cidade || reservaData.destino,
+      origemNome: confirmacao.descOrigem || bloqueio.origem?.cidade,
+      destinoNome: confirmacao.descDestino || bloqueio.destino?.cidade,
       data: reservaData.data,
       dataFormatada: new Date(reservaData.data).toLocaleDateString('pt-BR'),
       horarioSaida: bloqueio.dataSaida?.split(' ')[1] || '',
       horarioChegada: bloqueio.dataChegada?.split(' ')[1] || '',
       duracaoFormatada: calcularDuracao(bloqueio.dataSaida, bloqueio.dataChegada),
-      empresa: bloqueio.linha || 'VIACAO OURO E PRATA SA',
-      classe: getClasseNome(bloqueio.classeServicoId),
-      assentos: reservaData.assentos,
+      empresa: confirmacao.bpe?.cabecalhoEmitente?.razaoSocial || bloqueio.linha,
+      classe: confirmacao.bpe?.classe || getClasseNome(bloqueio.classeServicoId),
+      assentos: [confirmacao.poltrona],
       passageiro: {
         nome: confirmacao.nome,
         documento: confirmacao.documento,
         email: reservaData.passageiro.email,
       },
-      xmlBPE: confirmacao.xmlBPE,
-      qrCode: confirmacao.xmlBPE?.qrcode,
-      qrCodeBpe: confirmacao.xmlBPE?.qrcodeBpe,
-      chaveBpe: confirmacao.xmlBPE?.chaveBpe,
-      taxaEmbarque: confirmacao.taxaEmbarque,
-      qrCodeTaxaEmbarque: confirmacao.qrCodeTaxaEmbarque,
+      // 🔥 DADOS DO BPe (objeto bpe, não xmlBPE!)
+      chaveBpe: confirmacao.bpe?.chaveBpe,
+      qrCode: confirmacao.bpe?.qrcode,
+      qrCodeBpe: confirmacao.bpe?.qrcodeBpe,
+      tarifa: parseFloat(confirmacao.bpe?.tarifa || '0'),
+      pedagio: parseFloat(confirmacao.bpe?.pedagio || '0'),
+      taxaEmbarque: parseFloat(confirmacao.bpe?.taxaEmbarque || '0'),
+      seguro: parseFloat(confirmacao.bpe?.seguro || '0'),
+      outros: parseFloat(confirmacao.bpe?.outros || '0'),
+      numeroBPe: confirmacao.bpe?.numeroBpe,
+      serie: confirmacao.bpe?.serie,
+      protocolo: confirmacao.bpe?.protocoloAutorizacao,
+      dataEmissao: confirmacao.bpe?.dataAutorizacao,
+      _teste: false,
     });
 
   } catch (error) {
@@ -248,12 +256,7 @@ async function confirmarVenda(reserva: ReservaData, bloqueioResponse: BloqueioRe
   }
 
   const response = await res.json();
-  console.log('✅ Resposta confirmarVenda:', response);
-  
-  // 🔥 DEBUG DETALHADO - COPIAR ESTE JSON COMPLETO
-  console.log('=== INICIO DEBUG ===');
-  console.log(JSON.stringify(response, null, 2));
-  console.log('=== FIM DEBUG ===');
+  console.log('✅ Venda confirmada');
   
   return response;
 }

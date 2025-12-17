@@ -3,15 +3,17 @@ declare module 'qrcode' {
     width?: number;
     margin?: number;
     color?: { dark?: string; light?: string };
-    [key: string]: any;
+    errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+    type?: 'image/png' | 'image/jpeg' | 'image/webp';
+    quality?: number;
+    scale?: number;
   };
-
+  
   interface QRCodeStatic {
     toDataURL(text: string, options?: ToDataURLOptions): Promise<string>;
     toDataURL(text: string, cb: (err: Error | null, url: string) => void): void;
-    [key: string]: any;
   }
-
+  
   const QRCode: QRCodeStatic;
   export default QRCode;
 }

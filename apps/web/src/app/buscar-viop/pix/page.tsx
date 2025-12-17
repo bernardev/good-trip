@@ -47,7 +47,7 @@ function PixContent() {
         if (data.status === 'paid') {
           router.push(`/buscar-viop/confirmacao?order_id=${orderId}&status=paid`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Erro ao verificar pagamento:', error);
       } finally {
         setChecking(false);
@@ -72,7 +72,7 @@ function PixContent() {
       }
     })
       .then(setQrCodeImage)
-      .catch((err: Error) => console.error('Erro ao gerar QR Code:', err));
+      .catch((err: unknown) => console.error('Erro ao gerar QR Code:', err));
   }, [qrCode]);
 
   // 📋 Copiar para área de transferência

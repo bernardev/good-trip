@@ -75,29 +75,59 @@ export async function POST(req: NextRequest) {
         poltrona: reservaData.assentos[0],
         servico: reservaData.servico,
         total: reservaData.preco * reservaData.assentos.length,
-        origemId: reservaData.origem,
-        destinoId: reservaData.destino,
-        origemNome: "CURITIBA - PR",
-        destinoNome: "SAO PAULO - TIETE - SP",
+        origemNome: "ITAITUBA - PA",
+        destinoNome: "KM 30 (CAMPO VERDE) - PA",
         data: reservaData.data,
-        dataFormatada: "13/12/2025",
-        horarioSaida: "23:55",
-        horarioChegada: "07:00",
-        duracaoMinutos: 425,
-        duracaoFormatada: "7h 05min",
-        empresa: "VIACAO OURO E PRATA SA",
-        classe: "LEITO",
+        dataFormatada: new Date(reservaData.data).toLocaleDateString('pt-BR'),
+        horarioSaida: "14:40",
+        horarioChegada: "15:30",
+        duracaoFormatada: "50min",
+        empresa: "VIACAO OURO E PRATA S.A.",
+        classe: "SEMILEITO",
         assentos: reservaData.assentos,
         passageiro: {
           nome: `${reservaData.passageiro.nome} ${reservaData.passageiro.sobrenome}`,
           documento: reservaData.passageiro.documento,
           email: reservaData.passageiro.email,
         },
-        xmlBPE: {
-          qrcode: 'https://exemplo.com/qr-code-simulado.png',
-          qrcodeBpe: 'SIMULADO_QR_BPE',
-          chaveBpe: 'SIMULADO_CHAVE_BPE',
+        chaveBpe: 'SIMULADO_CHAVE_BPE_123456789',
+        qrCode: 'SIMULADO_QR_MONITRIIP',
+        qrCodeBpe: 'https://exemplo.com/qr-code-simulado.png',
+        qrCodeTaxaEmbarque: 'SIMULADO_QR_TAXA_EMBARQUE',
+        tarifa: 33.00,
+        pedagio: 0,
+        taxaEmbarque: 5,
+        seguro: 1.5,
+        outros: 0,
+        numeroBPe: "999999",
+        serie: "001",
+        protocolo: "999999999999999",
+        dataEmissao: new Date().toISOString(),
+        prefixo: "RSPA0088022",
+        plataforma: "3",
+        linha: "PORTO ALEGRE(RS)-SANTAREM(PA)",
+        cabecalhoAgencia: {
+          razaoSocial: "GOOD TRIP TRANSPORTE E TURISMO LTDA",
+          cnpj: "38.627.614/0001-70",
+          endereco: "AG GETULIO VARGAS",
+          numero: "519",
+          bairro: "CENTRO",
+          cidade: "ITAITUBA",
+          uf: "PA"
         },
+        cabecalhoEmitente: {
+          razaoSocial: "VIACAO OURO E PRATA S.A.",
+          cnpj: "92954106004725",
+          inscricaoEstadual: "154581976",
+          endereco: "TV DUQUE DE CAXIAS",
+          numero: "200",
+          bairro: "AMPARO",
+          cidade: "SANTAREM",
+          uf: "PA",
+          cep: "68035620"
+        },
+        dataHoraEmbarqueInicio: "27/12/2025 14:25",
+        dataHoraEmbarqueFim: "27/12/2025 14:39",
         _teste: true,
       });
     }
@@ -123,7 +153,7 @@ export async function POST(req: NextRequest) {
 
     console.log('🎉 BILHETE EMITIDO! Localizador:', confirmacao.localizador);
 
-    // Retornar dados completos para o frontend
+    // 🔥 Retornar dados completos para o frontend
     return NextResponse.json({
       localizador: confirmacao.localizador,
       status: 'CONFIRMADO',
@@ -139,7 +169,7 @@ export async function POST(req: NextRequest) {
       horarioSaida: bloqueio.dataSaida?.split(' ')[1] || '',
       horarioChegada: bloqueio.dataChegada?.split(' ')[1] || '',
       duracaoFormatada: calcularDuracao(bloqueio.dataSaida, bloqueio.dataChegada),
-      empresa: confirmacao.bpe?.cabecalhoEmitente?.razaoSocial || bloqueio.linha,
+      empresa: confirmacao.bpe?.linha || bloqueio.linha,
       classe: confirmacao.bpe?.classe || getClasseNome(bloqueio.classeServicoId),
       assentos: [confirmacao.poltrona],
       passageiro: {
@@ -149,7 +179,7 @@ export async function POST(req: NextRequest) {
       },
       // 🔥 DADOS DO BPe
       chaveBpe: confirmacao.bpe?.chaveBpe,
-      qrCode: confirmacao.bpe?.codigoMonitriipBPe, // QR Code embarque ônibus
+      qrCode: confirmacao.bpe?.codigoMonitriipBPe, // QR Code embarque ônibus (Monitriip)
       qrCodeBpe: confirmacao.bpe?.qrcodeBpe, // QR Code fiscal
       qrCodeTaxaEmbarque: confirmacao.cupomTaxaEmbarque, // QR Code taxa embarque rodoviária
       tarifa: parseFloat(confirmacao.bpe?.tarifa || '0'),
@@ -161,6 +191,14 @@ export async function POST(req: NextRequest) {
       serie: confirmacao.bpe?.serie,
       protocolo: confirmacao.bpe?.protocoloAutorizacao,
       dataEmissao: confirmacao.bpe?.dataAutorizacao,
+      // 🔥 NOVOS CAMPOS ADICIONADOS
+      prefixo: confirmacao.bpe?.prefixo,
+      plataforma: confirmacao.bpe?.plataforma,
+      linha: confirmacao.bpe?.linha,
+      cabecalhoAgencia: confirmacao.bpe?.cabecalhoAgencia,
+      cabecalhoEmitente: confirmacao.bpe?.cabecalhoEmitente,
+      dataHoraEmbarqueInicio: confirmacao.bpe?.dataHoraEmbarqueInicio,
+      dataHoraEmbarqueFim: confirmacao.bpe?.dataHoraEmbarqueFim,
       _teste: false,
     });
 
@@ -258,7 +296,6 @@ async function confirmarVenda(reserva: ReservaData, bloqueioResponse: BloqueioRe
 
   const response = await res.json();
   
-  // 🔥 DEBUG COMPLETO - COPIAR ESTE JSON
   console.log('=== RESPONSE COMPLETA ===');
   console.log(JSON.stringify(response, null, 2));
   console.log('=== FIM ===');
@@ -312,6 +349,7 @@ function getClasseNome(classeId?: number): string {
     1: 'CONVENCIONAL',
     2: 'EXECUTIVO',
     3: 'SEMI-LEITO',
+    7: 'SEMILEITO',
   };
   return classes[classeId] || 'CONVENCIONAL';
 }

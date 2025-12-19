@@ -265,25 +265,25 @@ export class ViopAdapter {
   /**
    * 🔥 CORRIGIDO: Aceita "YYYY-MM-DD HH:MM:SS" ou "HH:MM"
    */
-  private combineDateTime(date: string, time: string): string {
-    if (!time || time === '--:--') {
-      return new Date().toISOString();
-    }
-    
-    // Se time já vem no formato "YYYY-MM-DD HH:MM:SS" ou "YYYY-MM-DD HH:MM"
-    if (time.includes(' ')) {
-      const [datePart, timePart] = time.split(' ');
-      const hhmm = timePart.length > 5 ? timePart.slice(0, 5) : timePart;
-      return `${datePart}T${hhmm}:00.000Z`;
-    }
-    
-    // Formato antigo: apenas "HH:MM"
-    if (!date) {
-      return new Date().toISOString();
-    }
-    const hhmm = time.length > 5 ? time.slice(0, 5) : time;
-    return `${date}T${hhmm}:00.000Z`;
+private combineDateTime(date: string, time: string): string {
+  if (!time || time === '--:--') {
+    return new Date().toISOString();
   }
+  
+  // Se time já vem no formato "YYYY-MM-DD HH:MM:SS" ou "YYYY-MM-DD HH:MM"
+  if (time.includes(' ')) {
+    const [datePart, timePart] = time.split(' ');
+    const hhmm = timePart.length > 5 ? timePart.slice(0, 5) : timePart;
+    return `${datePart}T${hhmm}:00-03:00`;  // ✅ Adiciona timezone brasileiro
+  }
+  
+  // Formato antigo: apenas "HH:MM"
+  if (!date) {
+    return new Date().toISOString();
+  }
+  const hhmm = time.length > 5 ? time.slice(0, 5) : time;
+  return `${date}T${hhmm}:00-03:00`;  // ✅ Adiciona timezone brasileiro
+}
 
   /**
    * Calcula duração em minutos entre duas datas ISO

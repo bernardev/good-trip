@@ -17,7 +17,7 @@ export default function Page() {
       <HowItWorks />
       <PartnersMarquee />
       <AboutCallout />
-      <HomeSearchWidget />
+      
 
       {/* Botão flutuante WhatsApp */}
       <div className="fixed right-4 bottom-4 z-50">

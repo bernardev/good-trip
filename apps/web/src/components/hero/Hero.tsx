@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import SearchTabs from "@/components/search/SearchTabs";
 import { useSettings } from "@/hooks/useSettings";
 import type { Banner } from "@/../types/settings";
+import HomeSearchWidget from "@/components/search/HomeSearchWidget";
 
 const exo2 = Exo_2({ subsets: ["latin"], weight: ["700"] });
 
@@ -124,7 +125,7 @@ export default function Hero() {
             ref={searchWrapRef}
             className="glass rounded-2xl border border-cloud/80 shadow-soft p-4 md:p-6 backdrop-saturate-150 tilt text-ink"
           >
-            <SearchTabs />
+            <HomeSearchWidget />
           </div>
         </div>
 

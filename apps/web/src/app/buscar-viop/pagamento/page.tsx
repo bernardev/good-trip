@@ -345,6 +345,19 @@ function PagamentoContent() {
                     <span className="font-semibold text-sm">Cartão de Crédito</span>
                     <span className="text-xs text-slate-500">Em até 12x sem juros</span>
                   </div>
+                                {/* 🚨 AVISO DE INSTABILIDADE */}
+                  <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 mb-6 animate-pulse">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-bold text-red-900 mb-1">⚠️ Atenção</h4>
+                        <p className="text-sm text-red-700">
+                          Os pagamentos via <strong>cartão de crédito</strong> estão com instabilidade no momento. 
+                          Por favor, utilize <strong>PIX</strong> para garantir a aprovação imediata da sua compra.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                   {paymentMethod === 'credit_card' && (
                     <div className="absolute -top-2 -right-2 bg-blue-600 rounded-full p-1">
                       <CheckCircle2 className="w-4 h-4 text-white" />

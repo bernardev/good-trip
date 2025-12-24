@@ -155,9 +155,11 @@ export async function POST(request: NextRequest) {
       }
     };
 
+    // 🔥 CORREÇÃO: Estrutura correta do items com code
     const items = [{
-      amount: amount,
+      code: "PASSAGEM_ONIBUS",  // ← Código do produto (obrigatório)
       description: metadata?.title || 'Passagem de ônibus',
+      amount: amount,  // ← Valor JÁ COM JUROS incluídos
       quantity: 1
     }];
 

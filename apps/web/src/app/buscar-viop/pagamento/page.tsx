@@ -37,6 +37,22 @@ type ApiOnibusRes = {
   };
 };
 
+// 🔥 TAXAS DE JUROS (Opção B - Repassar ao cliente)
+const TAXAS_JUROS: Record<number, number> = {
+  1: 3.54,   // À vista também tem taxa!
+  2: 6.46,
+  3: 8.23,
+  4: 10.00,
+  5: 11.77,
+  6: 13.54,
+  7: 15.20,
+  8: 16.97,
+  9: 18.74,
+  10: 20.51,
+  11: 22.28,
+  12: 24.05,
+};
+
 function PagamentoContent() {
   const sp = useSearchParams();
   const router = useRouter();
@@ -118,7 +134,7 @@ function PagamentoContent() {
     return `Passagem ${o} → ${d}`;
   }, [origemNome, destinoNome, q.origem, q.destino]);
 
-  // 🔥 NOVO: Cálculo com taxa de serviço
+  // Subtotal (preço base)
   const subtotal = useMemo<number>(() => {
     if (precoReal && precoReal > 0) {
       const numAssentos = q.assentos ? q.assentos.split(',').filter(Boolean).length : 1;
@@ -127,13 +143,27 @@ function PagamentoContent() {
     return 89.70;
   }, [precoReal, q.assentos]);
 
+  // Taxa de serviço (5%)
   const taxaServico = useMemo<number>(() => {
-    return subtotal * 0.05; // 5% de taxa
+    return subtotal * 0.05;
   }, [subtotal]);
 
-  const total = useMemo<number>(() => {
+  // Total SEM juros (subtotal + taxa serviço)
+  const totalSemJuros = useMemo<number>(() => {
     return subtotal + taxaServico;
   }, [subtotal, taxaServico]);
+
+  // 🔥 Total COM juros (baseado nas parcelas selecionadas)
+  const totalComJuros = useMemo<number>(() => {
+    const numParcelas = parseInt(installments);
+    const taxaJuros = TAXAS_JUROS[numParcelas] || 0;
+    return totalSemJuros * (1 + taxaJuros / 100);
+  }, [totalSemJuros, installments]);
+
+  // Valor dos juros aplicados
+  const valorJuros = useMemo<number>(() => {
+    return totalComJuros - totalSemJuros;
+  }, [totalComJuros, totalSemJuros]);
 
   const dataFormatada = useMemo(() => {
     if (!q.data) return '—';
@@ -184,20 +214,25 @@ function PagamentoContent() {
 
   const cardBrand = useMemo(() => getCardBrand(cardNumber), [cardNumber, getCardBrand]);
 
+  // 🔥 Opções de parcelamento COM juros
   const installmentOptions = useMemo(() => {
     const options = [];
     const maxInstallments = 12;
+    
     for (let i = 1; i <= maxInstallments; i++) {
-      const value = total / i;
+      const taxaJuros = TAXAS_JUROS[i] || 0;
+      const totalParcelas = totalSemJuros * (1 + taxaJuros / 100);
+      const valorParcela = totalParcelas / i;
+      
       options.push({
         value: i.toString(),
         label: i === 1 
-          ? `1x de R$ ${total.toFixed(2)} sem juros`
-          : `${i}x de R$ ${value.toFixed(2)} sem juros`
+          ? `1x de R$ ${totalParcelas.toFixed(2)} (taxa ${taxaJuros.toFixed(2)}%)`
+          : `${i}x de R$ ${valorParcela.toFixed(2)} (total: R$ ${totalParcelas.toFixed(2)})`
       });
     }
     return options;
-  }, [total]);
+  }, [totalSemJuros]);
 
   const processPayment = useCallback(async () => {
     setErr(null);
@@ -214,6 +249,7 @@ function PagamentoContent() {
           throw new Error('Número do cartão inválido');
         }
 
+        // 🔥 Enviar o total COM juros
         const response = await fetch('/api/payments/pagarme/process', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -224,7 +260,7 @@ function PagamentoContent() {
             card_expiry: cardExpiry,
             card_cvv: cardCvv,
             installments: parseInt(installments),
-            amount: Math.round(total * 100),
+            amount: Math.round(totalComJuros * 100), // 🔥 COM JUROS!
             customer: {
               name: `${q.nome ?? 'Teste'} ${q.sobrenome ?? 'Usuário'}`,
               email: q.email ?? '[email protected]',
@@ -254,12 +290,13 @@ function PagamentoContent() {
         router.push(`/buscar-viop/confirmacao?order_id=${result.order_id}&status=paid`);
 
       } else if (paymentMethod === 'pix') {
+        // PIX não tem juros, usa total sem juros
         const response = await fetch('/api/payments/pagarme/process', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             payment_method: 'pix',
-            amount: Math.round(total * 100),
+            amount: Math.round(totalSemJuros * 100), // SEM JUROS
             customer: {
               name: `${q.nome ?? 'Teste'} ${q.sobrenome ?? 'Usuário'}`,
               email: q.email ?? '[email protected]',
@@ -297,7 +334,7 @@ function PagamentoContent() {
     }
   }, [
     paymentMethod, cardNumber, cardName, cardExpiry, cardCvv, 
-    installments, total, q, title, router
+    installments, totalComJuros, totalSemJuros, q, title, router
   ]);
 
   if (loadingViagem) {
@@ -343,20 +380,7 @@ function PagamentoContent() {
                   <div className="flex flex-col items-center gap-2">
                     <CreditCard className={`w-8 h-8 ${paymentMethod === 'credit_card' ? 'text-blue-600' : 'text-slate-400'}`} />
                     <span className="font-semibold text-sm">Cartão de Crédito</span>
-                    <span className="text-xs text-slate-500">Em até 12x sem juros</span>
-                  </div>
-                                {/* 🚨 AVISO DE INSTABILIDADE */}
-                  <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 mb-6 animate-pulse">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="font-bold text-red-900 mb-1">⚠️ Atenção</h4>
-                        <p className="text-sm text-red-700">
-                          Os pagamentos via <strong>cartão de crédito</strong> estão com instabilidade no momento. 
-                          Por favor, utilize <strong>PIX</strong> para garantir a aprovação imediata da sua compra.
-                        </p>
-                      </div>
-                    </div>
+                    <span className="text-xs text-slate-500">Em até 12x</span>
                   </div>
                   {paymentMethod === 'credit_card' && (
                     <div className="absolute -top-2 -right-2 bg-blue-600 rounded-full p-1">
@@ -376,7 +400,7 @@ function PagamentoContent() {
                   <div className="flex flex-col items-center gap-2">
                     <QrCode className={`w-8 h-8 ${paymentMethod === 'pix' ? 'text-blue-600' : 'text-slate-400'}`} />
                     <span className="font-semibold text-sm">PIX</span>
-                    <span className="text-xs text-slate-500">Aprovação imediata</span>
+                    <span className="text-xs text-slate-500">Sem juros</span>
                   </div>
                   {paymentMethod === 'pix' && (
                     <div className="absolute -top-2 -right-2 bg-blue-600 rounded-full p-1">
@@ -384,6 +408,20 @@ function PagamentoContent() {
                     </div>
                   )}
                 </button>
+              </div>
+
+              {/* 🚨 AVISO DE INSTABILIDADE */}
+              <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 mb-6 animate-pulse">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-bold text-red-900 mb-1">⚠️ Atenção</h4>
+                    <p className="text-sm text-red-700">
+                      Os pagamentos via <strong>cartão de crédito</strong> estão com instabilidade no momento. 
+                      Por favor, utilize <strong>PIX</strong> para garantir a aprovação imediata da sua compra.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {paymentMethod === 'credit_card' && (
@@ -595,25 +633,36 @@ function PagamentoContent() {
                 </div>
               </div>
 
-              {/* 🔥 RESUMO ATUALIZADO COM TAXA */}
+              {/* 🔥 RESUMO COM JUROS */}
               <div className="border-t border-slate-200 pt-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-slate-600">Subtotal</span>
                   <span className="font-medium">R$ {subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-2">
                   <span className="text-slate-600">Taxa de serviço (5%)</span>
                   <span className="font-medium text-blue-600">R$ {taxaServico.toFixed(2)}</span>
                 </div>
+                
+                {/* Mostrar juros só no cartão */}
+                {paymentMethod === 'credit_card' && valorJuros > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-slate-600">Juros ({TAXAS_JUROS[parseInt(installments)]}%)</span>
+                    <span className="font-medium text-orange-600">R$ {valorJuros.toFixed(2)}</span>
+                  </div>
+                )}
+                
                 <div className="flex justify-between items-center pt-4 border-t-2 border-slate-300">
                   <span className="text-lg font-bold">Total a Pagar</span>
-                  <span className="text-2xl font-bold text-blue-600">R$ {total.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-blue-600">
+                    R$ {paymentMethod === 'pix' ? totalSemJuros.toFixed(2) : totalComJuros.toFixed(2)}
+                  </span>
                 </div>
               </div>
 
               {paymentMethod === 'credit_card' && installments !== '1' && (
                 <div className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
-                  💳 {installments}x de R$ {(total / parseInt(installments)).toFixed(2)} sem juros
+                  💳 {installments}x de R$ {(totalComJuros / parseInt(installments)).toFixed(2)}
                 </div>
               )}
             </div>

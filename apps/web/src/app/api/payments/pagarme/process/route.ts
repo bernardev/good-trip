@@ -1,7 +1,6 @@
 // app/api/payments/pagarme/process/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
+import { kv } from '@vercel/kv';
 
 const PAGARME_SECRET_KEY = process.env.PAGARME_SECRET_KEY || '';
 const PAGARME_API_URL = 'https://api.pagar.me/core/v5';
@@ -20,25 +19,22 @@ interface ReservaData {
   assentos: string[];
   passageiros: Array<{
     assento: string;
-    nome: string;
-    sobrenome: string;
+    nomeCompleto: string;
     documento?: string;
-    email: string;
+    telefone: string;
+    email?: string;
   }>;
   preco: number;
   metadata?: Record<string, unknown>;
 }
 
-// 🔥 Salvar dados da reserva no filesystem
+// 🔥 Salvar dados da reserva no Vercel KV
 async function salvarDadosReserva(orderId: string, data: ReservaData) {
   try {
-    const dir = join(process.cwd(), '.cache', 'reservas');
-    await mkdir(dir, { recursive: true });
-    const filepath = join(dir, `${orderId}.json`);
-    await writeFile(filepath, JSON.stringify(data, null, 2));
-    console.log('💾 Dados salvos:', orderId);
+    await kv.set(`reserva:${orderId}`, JSON.stringify(data), { ex: 3600 });
+    console.log('💾 Dados salvos no KV:', orderId);
   } catch (error) {
-    console.error('❌ Erro ao salvar:', error);
+    console.error('❌ Erro ao salvar no KV:', error);
   }
 }
 
@@ -143,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     const customerData = {
       name: customer.name,
-      email: customer.email,
+      email: customer.email || 'naotemmail@goodtrip.com.br',
       type: 'individual',
       document: customer.document.replace(/\D/g, ''),
       document_type: customer.document_type || 'CPF',

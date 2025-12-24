@@ -14,10 +14,10 @@ type ReservaData = {
   assentos: string[];
   passageiros: Array<{
     assento: string;
-    nome: string;
-    sobrenome: string;
+    nomeCompleto: string;
     documento: string;
-    email: string;
+    telefone: string;
+    email?: string;
   }>;
   preco: number;
 };
@@ -264,11 +264,11 @@ async function confirmarVenda(
   
   const payload = {
     transacao: bloqueioResponse.transacao,
-    nomePassageiro: `${passageiro.nome} ${passageiro.sobrenome}`,
+    nomePassageiro: passageiro.nomeCompleto,
     documentoPassageiro: passageiro.documento,
     tipoDocumentoPassageiro: "CPF",
-    email: passageiro.email,
-    telefone: "41999999999",
+    email: passageiro.email || 'naotemmail@goodtrip.com.br',
+    telefone: passageiro.telefone.replace(/\D/g, ''),
     idFormaPagamento: 1,
     numOperacion: bloqueioResponse.numOperacion,
     localizador: bloqueioResponse.localizador,

@@ -14,6 +14,7 @@ import {
   User2,
   Ticket,
   ArrowRight,
+  Phone,
 } from "lucide-react";
 
 /** ===== Tipos ===== */
@@ -41,13 +42,12 @@ type DocTipo = "CPF" | "RG" | "Passaporte";
 
 type PassageiroForm = {
   assento: string;
-  nome: string;
-  sobrenome: string;
+  nomeCompleto: string;
   docTipo: DocTipo;
   docNumero: string;
   nacionalidade: string;
+  telefone: string;
   email: string;
-  emailConfirm: string;
 };
 
 /** ===== Utils ===== */
@@ -83,13 +83,12 @@ export default function IdentificacaoClient({ query, meta }: Props) {
   const [passageiros, setPassageiros] = useState<PassageiroForm[]>(
     query.assentos.map(assento => ({
       assento,
-      nome: "",
-      sobrenome: "",
+      nomeCompleto: "",
       docTipo: "CPF" as DocTipo,
       docNumero: "",
       nacionalidade: "Brasil",
+      telefone: "",
       email: "",
-      emailConfirm: "",
     }))
   );
 
@@ -115,14 +114,12 @@ export default function IdentificacaoClient({ query, meta }: Props) {
   function validate(): string | null {
     for (let i = 0; i < passageiros.length; i++) {
       const p = passageiros[i];
-      if (!p.nome.trim() || !p.sobrenome.trim()) 
-        return `Passageiro ${i+1} (Assento ${p.assento}): Preencha nome e sobrenome.`;
+      if (!p.nomeCompleto.trim()) 
+        return `Passageiro ${i+1} (Assento ${p.assento}): Preencha o nome completo.`;
       if (!p.docNumero.trim()) 
         return `Passageiro ${i+1} (Assento ${p.assento}): Informe o documento.`;
-      if (!p.email.trim() || !p.emailConfirm.trim()) 
-        return `Passageiro ${i+1} (Assento ${p.assento}): Informe os e-mails.`;
-      if (p.email !== p.emailConfirm) 
-        return `Passageiro ${i+1} (Assento ${p.assento}): E-mails não conferem.`;
+      if (!p.telefone.trim()) 
+        return `Passageiro ${i+1} (Assento ${p.assento}): Informe o telefone.`;
     }
     if (!terms) return "Aceite os Termos e Condições para continuar.";
     return null;
@@ -145,7 +142,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
         destino: query.destino,
         data: query.data,
         assentos: query.assentos.join(","),
-        passageiros: JSON.stringify(passageiros), // 🔥 Enviar array de passageiros
+        passageiros: JSON.stringify(passageiros),
         ...(typeof meta?.preco === "number" ? { preco: String(meta.preco) } : {}),
       });
       window.location.href = `/buscar-viop/pagamento?${params.toString()}`;
@@ -196,22 +193,18 @@ export default function IdentificacaoClient({ query, meta }: Props) {
               </header>
 
               <div className="p-6 space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Nome Completo */}
+                <div>
                   <Field
-                    label="Nome*"
+                    label="Nome Completo*"
                     icon={<User2 className="w-4 h-4" />}
-                    value={passageiro.nome}
-                    onChange={(v) => setPassageiro(index, "nome", v)}
-                  />
-                  <Field
-                    label="Sobrenome*"
-                    icon={<User2 className="w-4 h-4" />}
-                    value={passageiro.sobrenome}
-                    onChange={(v) => setPassageiro(index, "sobrenome", v)}
+                    value={passageiro.nomeCompleto}
+                    onChange={(v) => setPassageiro(index, "nomeCompleto", v)}
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-[170px_1fr_170px] gap-4">
+                {/* Documentos - Grid 3 colunas */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Select
                     label="Tipo de documento*"
                     icon={<Hash className="w-4 h-4" />}
@@ -237,20 +230,23 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                   />
                 </div>
 
+                {/* Contato - Grid 2 colunas */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field
-                    type="email"
-                    label="E-mail*"
-                    icon={<Mail className="w-4 h-4" />}
-                    value={passageiro.email}
-                    onChange={(v) => setPassageiro(index, "email", v)}
+                    type="tel"
+                    label="Telefone/WhatsApp*"
+                    icon={<Phone className="w-4 h-4" />}
+                    value={passageiro.telefone}
+                    onChange={(v) => setPassageiro(index, "telefone", v)}
+                    placeholder="(00) 00000-0000"
                   />
                   <Field
                     type="email"
-                    label="Confirmar e-mail*"
+                    label="E-mail (opcional)"
                     icon={<Mail className="w-4 h-4" />}
-                    value={passageiro.emailConfirm}
-                    onChange={(v) => setPassageiro(index, "emailConfirm", v)}
+                    value={passageiro.email}
+                    onChange={(v) => setPassageiro(index, "email", v)}
+                    required={false}
                   />
                 </div>
               </div>
@@ -394,12 +390,16 @@ function Field({
   value,
   onChange,
   type = "text",
+  placeholder,
+  required = true,
 }: {
   label: string;
   icon?: React.ReactNode;
   value: string;
   onChange: (v: string) => void;
-  type?: "text" | "email";
+  type?: "text" | "email" | "tel";
+  placeholder?: string;
+  required?: boolean;
 }) {
   return (
     <label className="block">
@@ -411,8 +411,9 @@ function Field({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
         className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm focus:border-blue-600 focus:outline-none transition-colors"
-        required
+        required={required}
       />
     </label>
   );

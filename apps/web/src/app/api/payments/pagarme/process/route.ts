@@ -1,6 +1,7 @@
 // app/api/payments/pagarme/process/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
 
 const PAGARME_SECRET_KEY = process.env.PAGARME_SECRET_KEY || '';
 const PAGARME_API_URL = 'https://api.pagar.me/core/v5';
@@ -17,23 +18,27 @@ interface ReservaData {
   destino?: string;
   data?: string;
   assentos: string[];
-  passageiro: {
+  passageiros: Array<{
+    assento: string;
     nome: string;
     sobrenome: string;
     documento?: string;
     email: string;
-  };
+  }>;
   preco: number;
   metadata?: Record<string, unknown>;
 }
 
-// 🔥 Salvar dados da reserva no Vercel KV
+// 🔥 Salvar dados da reserva no filesystem
 async function salvarDadosReserva(orderId: string, data: ReservaData) {
   try {
-    await kv.set(`reserva:${orderId}`, JSON.stringify(data), { ex: 3600 }); // Expira em 1 hora
-    console.log('💾 Dados salvos no KV:', orderId);
+    const dir = join(process.cwd(), '.cache', 'reservas');
+    await mkdir(dir, { recursive: true });
+    const filepath = join(dir, `${orderId}.json`);
+    await writeFile(filepath, JSON.stringify(data, null, 2));
+    console.log('💾 Dados salvos:', orderId);
   } catch (error) {
-    console.error('❌ Erro ao salvar no KV:', error);
+    console.error('❌ Erro ao salvar:', error);
   }
 }
 
@@ -60,19 +65,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // 🔥 Preparar dados da reserva para salvar
+    // 🔥 Preparar dados da reserva com múltiplos passageiros
     const reservaData: ReservaData = {
       servico: booking?.servico,
       origem: booking?.origem,
       destino: booking?.destino,
       data: booking?.data,
       assentos: booking?.assentos || [],
-      passageiro: {
-        nome: customer.name?.split(' ')[0] || '',
-        sobrenome: customer.name?.split(' ').slice(1).join(' ') || '',
-        documento: customer.document?.replace(/\D/g, ''),
-        email: customer.email,
-      },
+      passageiros: booking?.passageiros || [],
       preco: amount / 100,
       metadata,
     };
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     console.log('📦 Dados da reserva preparados:', {
       servico: reservaData.servico,
       assentos: reservaData.assentos,
-      passageiro: reservaData.passageiro.email
+      passageiros: reservaData.passageiros.length
     });
 
     // ========== MODO SIMULAÇÃO ==========
@@ -90,7 +90,8 @@ export async function POST(request: NextRequest) {
         payment_method,
         amount,
         customer: customer.name,
-        installments
+        installments,
+        passageiros: reservaData.passageiros.length
       }, null, 2));
 
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
           order_id: orderId,
           charge_id: `sim_charge_${Date.now()}`,
           status: 'paid',
-          message: '✅ Pagamento simulado com sucesso! (Configure PAGARME_SECRET_KEY no .env.local para processar pagamentos reais)',
+          message: '✅ Pagamento simulado com sucesso!',
           simulation: true
         });
       }
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest) {
           qr_code: 'SIMULADO_QR_CODE_' + Math.random().toString(36).substring(7).toUpperCase(),
           qr_code_url: 'https://exemplo.com/qr-code-simulado.png',
           expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-          message: '✅ PIX simulado gerado! (Configure PAGARME_SECRET_KEY para gerar PIX real)',
+          message: '✅ PIX simulado gerado!',
           simulation: true
         });
       }
@@ -155,11 +156,10 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    // 🔥 CORREÇÃO: Estrutura correta do items com code
     const items = [{
-      code: "PASSAGEM_ONIBUS",  // ← Código do produto (obrigatório)
+      code: "PASSAGEM_ONIBUS",
       description: metadata?.title || 'Passagem de ônibus',
-      amount: amount,  // ← Valor JÁ COM JUROS incluídos
+      amount: amount,
       quantity: 1
     }];
 

@@ -25,6 +25,7 @@ type ReservaResult = {
   empresa?: string;
   classe?: string;
   assentos?: string[];
+  localizadores?: string[]; // 🔥 Array de localizadores
   servico?: string;
   poltrona?: string;
   passageiro?: {
@@ -32,9 +33,9 @@ type ReservaResult = {
     email: string;
     documento?: string;
   };
-  qrCode?: string; // QR Code embarque ônibus (Monitriip)
-  qrCodeBpe?: string; // QR Code fiscal
-  qrCodeTaxaEmbarque?: string; // QR Code taxa embarque rodoviária
+  qrCode?: string;
+  qrCodeBpe?: string;
+  qrCodeTaxaEmbarque?: string;
   chaveBpe?: string;
   taxaEmbarque?: number;
   pedagio?: number;
@@ -157,20 +158,26 @@ function ConfirmacaoContent() {
   const isTeste = reserva?._teste === true;
   const chaveBpeFormatada = reserva?.chaveBpe ? reserva.chaveBpe.match(/.{1,4}/g)?.join(' ') || reserva.chaveBpe : '';
 
-  // Success - Bilhete Eletrônico
+  // 🔥 Múltiplos bilhetes (um para cada assento)
+  const numAssentos = reserva?.assentos?.length || 1;
+  const assentos = reserva?.assentos || [reserva?.poltrona || ''];
+  const localizadores = reserva?.localizadores || [reserva?.localizador || ''];
+
+  // Success - Bilhete(s) Eletrônico(s)
   return (
     <>
       <style jsx global>{`
         @media print {
           body * { visibility: hidden; }
-          #bilhete-eletronico, #bilhete-eletronico * { visibility: visible; }
-          #bilhete-eletronico {
+          .bilhete-print, .bilhete-print * { visibility: visible; }
+          .bilhete-print {
             position: absolute;
             left: 0;
             top: 0;
             width: 100%;
           }
           .no-print { display: none !important; }
+          .page-break { page-break-after: always; }
           @page { 
             size: A4 portrait; 
             margin: 1cm; 
@@ -188,7 +195,7 @@ function ConfirmacaoContent() {
           
           <button
             onClick={() => {
-              const whatsappText = `🎫 *Bilhete Good Trip*\n\n📍 ${reserva?.origemNome} → ${reserva?.destinoNome}\n📅 ${reserva?.dataFormatada}\n🕐 ${reserva?.horarioSaida}\n💺 Assento: ${reserva?.poltrona}\n🔢 Localizador: *${reserva?.localizador}*\n\n✅ Passagem confirmada!`;
+              const whatsappText = `🎫 *Bilhetes Good Trip*\n\n📍 ${reserva?.origemNome} → ${reserva?.destinoNome}\n📅 ${reserva?.dataFormatada}\n🕐 ${reserva?.horarioSaida}\n💺 Assentos: ${assentos.join(', ')}\n🔢 Localizadores: ${localizadores.join(', ')}\n\n✅ Passagens confirmadas!`;
               const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
               window.open(whatsappUrl, '_blank');
             }}
@@ -202,7 +209,7 @@ function ConfirmacaoContent() {
 
           <button onClick={() => window.print()} className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors ml-auto">
             <Download className="w-4 h-4" />
-            Imprimir Bilhete
+            Imprimir {numAssentos > 1 ? 'Bilhetes' : 'Bilhete'}
           </button>
         </div>
 
@@ -210,155 +217,171 @@ function ConfirmacaoContent() {
         {isTeste && (
           <div className="max-w-4xl mx-auto mb-4 bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 no-print">
             <p className="text-yellow-800 font-bold text-center">
-              ⚠️ ATENÇÃO: Este é um bilhete de TESTE. Não é válido para embarque.
+              ⚠️ ATENÇÃO: {numAssentos > 1 ? 'Estes são bilhetes de TESTE' : 'Este é um bilhete de TESTE'}. Não {numAssentos > 1 ? 'são válidos' : 'é válido'} para embarque.
             </p>
           </div>
         )}
 
-        {/* Bilhete Eletrônico */}
-        <div id="bilhete-eletronico" className="max-w-4xl mx-auto bg-white shadow-xl border border-gray-300">
-          
-          {/* CABEÇALHO AGÊNCIA */}
-          <div className="border-b flex items-start gap-2 p-4">
-            <Image src="/logo-goodtrip.jpeg" alt="Good Trip" width={50} height={50} className="object-contain" />
-            <div className="flex-1">
-              <p className="font-bold text-xs">{reserva?.cabecalhoAgencia?.razaoSocial || 'GOOD TRIP TRANSPORTE E TURISMO LTDA'}</p>
-              <p className="text-xs">{reserva?.cabecalhoAgencia?.cnpj || '38.627.614/0001-70'}</p>
-              <p className="text-xs">{reserva?.cabecalhoAgencia?.endereco || 'AG GETULIO VARGAS'}, {reserva?.cabecalhoAgencia?.numero || '519'} - {reserva?.cabecalhoAgencia?.bairro || 'CENTRO'}</p>
-              <p className="text-xs">{reserva?.cabecalhoAgencia?.cidade || 'ITAITUBA'} - {reserva?.cabecalhoAgencia?.uf || 'PA'}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs">Whatsapp: (93) 99143-6570</p>
-              <p className="text-xs">E-mail: suporte@goodtrip.com.br</p>
-            </div>
-          </div>
+        {/* 🔥 LOOP: Um bilhete para cada assento */}
+        {assentos.map((assento, index) => {
+          const localizadorAtual = localizadores[index] || reserva?.localizador || '';
+          const isUltimo = index === assentos.length - 1;
 
-          {/* CABEÇALHO EMITENTE */}
-          <div className="border-b bg-gray-50 p-4 text-center">
-            <p className="font-bold text-xs">{reserva?.cabecalhoEmitente?.razaoSocial}</p>
-            <p className="text-xs">CNPJ: {reserva?.cabecalhoEmitente?.cnpj} IE: {reserva?.cabecalhoEmitente?.inscricaoEstadual}</p>
-            <p className="text-xs">{reserva?.cabecalhoEmitente?.endereco}, {reserva?.cabecalhoEmitente?.numero} - {reserva?.cabecalhoEmitente?.bairro} | CIDADE | ESTADO: {reserva?.cabecalhoEmitente?.cidade} | {reserva?.cabecalhoEmitente?.uf} CEP: {reserva?.cabecalhoEmitente?.cep}</p>
-            <p className="font-bold text-sm mt-2">Documento Auxiliar do Bilhete de Passagem Eletrônico</p>
-            <p className="text-xs mt-1">SAC: 0800 551 8666</p>
-          </div>
+          return (
+            <div key={index} className={`bilhete-print ${!isUltimo ? 'page-break' : ''}`}>
+              <div className="max-w-4xl mx-auto bg-white shadow-xl border border-gray-300 mb-8">
+                
+                {/* Badge de bilhete múltiplo */}
+                {numAssentos > 1 && (
+                  <div className="bg-blue-600 text-white text-center py-2 font-bold">
+                    Bilhete {index + 1} de {numAssentos}
+                  </div>
+                )}
 
-          {/* ORIGEM E DESTINO */}
-          <div className="border-b p-4">
-            <div className="flex justify-between text-sm font-bold mb-2">
-              <div>Origem: {reserva?.origemNome}</div>
-              <div>Destino: {reserva?.destinoNome}</div>
-            </div>
-            <p className="text-center text-sm font-bold">Data: {reserva?.dataFormatada}</p>
-          </div>
-
-          {/* DADOS DA VIAGEM */}
-          <div className="border-b p-4 text-center">
-            <div className="grid grid-cols-4 gap-3 mb-3 text-xs">
-              <div className="text-left">
-                <p><strong>Embarque:</strong> {reserva?.dataFormatada} {reserva?.horarioSaida}</p>
-              </div>
-              <div>
-                <p><strong>Partida:</strong> {reserva?.dataFormatada} {reserva?.horarioSaida}</p>
-              </div>
-              <div>
-                <p><strong>Chegada:</strong> {reserva?.dataFormatada} {reserva?.horarioChegada}</p>
-              </div>
-              <div className="text-right">
-                <p><strong>Poltrona:</strong> {reserva?.poltrona}</p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-3 gap-3 text-xs mb-2">
-              <div><p><strong>Serviço:</strong> {reserva?.servico}</p></div>
-              <div><p><strong>Tipo:</strong> {reserva?.classe}</p></div>
-              <div><p><strong>Prefixo:</strong> {reserva?.prefixo}</p></div>
-            </div>
-            
-            <div className="text-xs">
-              <p><strong>Linha:</strong> {reserva?.linha}</p>
-              {reserva?.plataforma && <p className="mt-1"><strong>Plataforma:</strong> {reserva.plataforma}</p>}
-            </div>
-          </div>
-
-          {/* VALORES */}
-          <div className="border-b p-4 text-center text-xs">
-            <div className="space-y-1">
-              <p><strong>Tarifa:</strong> R$ {(reserva?.tarifa || 0).toFixed(2)}</p>
-              <p><strong>Pedágio:</strong> R$ {(reserva?.pedagio || 0).toFixed(2)}</p>
-              <p><strong>Embarque:</strong> R$ {(reserva?.taxaEmbarque || 0).toFixed(2)}</p>
-              <p><strong>Seguro:</strong> R$ {(reserva?.seguro || 0).toFixed(2)}</p>
-              <p><strong>Outros:</strong> R$ {(reserva?.outros || 0).toFixed(2)}</p>
-              <p className="font-bold text-sm pt-2"><strong>Valor Total:</strong> R$ {(reserva?.total || 0).toFixed(2)}</p>
-              <p><strong>Desconto:</strong> R$ 0,00</p>
-              <p className="font-bold text-sm"><strong>Valor a Pagar:</strong> R$ {(reserva?.total || 0).toFixed(2)}</p>
-              <p className="font-bold pt-2">FORMA PAGAMENTO: VALOR PAGO</p>
-              <p><strong>Crédito DT:</strong> R$ {(reserva?.total || 0).toFixed(2)}</p>
-              <p><strong>Troco:</strong> R$ 0,00</p>
-            </div>
-          </div>
-
-          {/* CHAVE BPe */}
-          <div className="border-b p-4 text-center">
-            <p className="text-xs mb-1">Consulta pela Chave de Acesso em</p>
-            <p className="text-xs text-blue-600">http://bpe.svrs.rs.gov.br/consulta</p>
-            <p className="font-mono text-xs my-2">{chaveBpeFormatada}</p>
-            <div className="flex justify-center my-3">
-              {reserva?.qrCodeBpe && <QRCodeSVG value={reserva.qrCodeBpe} size={120} level="M" />}
-            </div>
-          </div>
-
-          {/* QR CODE EMBARQUE ÔNIBUS E PASSAGEIRO */}
-          <div className="border-b p-4">
-            <div className="grid grid-cols-2 gap-6">
-              <div className="flex flex-col items-center">
-                {reserva?.qrCode && <QRCodeSVG value={reserva.qrCode} size={140} level="M" />}
-                <p className="font-bold text-sm mt-3">Embarque no Ônibus</p>
-                <p className="text-xs">(Monitriip)</p>
-              </div>
-              <div className="text-xs">
-                <p><strong>Passageiro(a)</strong> DOC {reserva?.passageiro?.documento} - {reserva?.passageiro?.nome?.toUpperCase()}</p>
-                <p className="mt-2"><strong>TIPO DE DESCONTO</strong> Normal</p>
-                <p><strong>Documento de desconto</strong> ---</p>
-                <div className="mt-4 pt-3 border-t">
-                  <p><strong>BP-e nº:</strong> {reserva?.numeroBPe} <strong>Série:</strong> {reserva?.serie}</p>
-                  <p className="mt-1"><strong>Data de emissão:</strong> {reserva?.dataEmissao ? new Date(reserva.dataEmissao).toLocaleString('pt-BR') : ''}</p>
-                  <p className="mt-1"><strong>Protocolo de autorização:</strong> {reserva?.protocolo}</p>
-                  <p className="mt-1"><strong>Nº bilhete:</strong> {reserva?.numeroBilhete}</p>
-                  <p className="mt-1"><strong>Localizador:</strong> {reserva?.localizador}</p>
+                {/* CABEÇALHO AGÊNCIA */}
+                <div className="border-b flex items-start gap-2 p-4">
+                  <Image src="/logo-goodtrip.jpeg" alt="Good Trip" width={50} height={50} className="object-contain" />
+                  <div className="flex-1">
+                    <p className="font-bold text-xs">{reserva?.cabecalhoAgencia?.razaoSocial || 'GOOD TRIP TRANSPORTE E TURISMO LTDA'}</p>
+                    <p className="text-xs">{reserva?.cabecalhoAgencia?.cnpj || '38.627.614/0001-70'}</p>
+                    <p className="text-xs">{reserva?.cabecalhoAgencia?.endereco || 'AG GETULIO VARGAS'}, {reserva?.cabecalhoAgencia?.numero || '519'} - {reserva?.cabecalhoAgencia?.bairro || 'CENTRO'}</p>
+                    <p className="text-xs">{reserva?.cabecalhoAgencia?.cidade || 'ITAITUBA'} - {reserva?.cabecalhoAgencia?.uf || 'PA'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs">Whatsapp: (93) 99143-6570</p>
+                    <p className="text-xs">E-mail: suporte@goodtrip.com.br</p>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </div>
 
-          {/* QR CODE PORTÃO */}
-          {reserva?.qrCodeTaxaEmbarque && (
-            <div className="border-b p-4 text-center">
-              <QRCodeSVG value={reserva.qrCodeTaxaEmbarque} size={120} level="M" className="mx-auto" />
-              <p className="font-bold text-sm mt-3">Acesso ao Portão de Embarque</p>
-            </div>
-          )}
-
-          {/* RODAPÉ */}
-          <div className="p-4">
-            <div className="grid grid-cols-2 gap-6 text-xs">
-              <div>
-                <p className="font-bold mb-3">Passageiro, consulte seus direitos e deveres</p>
-                <div className="flex justify-center my-3">
-                  <QRCodeSVG value="https://www.goodtrip.com.br/direitos" size={80} level="M" />
+                {/* CABEÇALHO EMITENTE */}
+                <div className="border-b bg-gray-50 p-4 text-center">
+                  <p className="font-bold text-xs">{reserva?.cabecalhoEmitente?.razaoSocial}</p>
+                  <p className="text-xs">CNPJ: {reserva?.cabecalhoEmitente?.cnpj} IE: {reserva?.cabecalhoEmitente?.inscricaoEstadual}</p>
+                  <p className="text-xs">{reserva?.cabecalhoEmitente?.endereco}, {reserva?.cabecalhoEmitente?.numero} - {reserva?.cabecalhoEmitente?.bairro} | CIDADE | ESTADO: {reserva?.cabecalhoEmitente?.cidade} | {reserva?.cabecalhoEmitente?.uf} CEP: {reserva?.cabecalhoEmitente?.cep}</p>
+                  <p className="font-bold text-sm mt-2">Documento Auxiliar do Bilhete de Passagem Eletrônico</p>
+                  <p className="text-xs mt-1">SAC: 0800 551 8666</p>
                 </div>
-                <p className="mt-2">Aponte a câmera do seu celular ou acesse</p>
-                <p className="text-blue-600 underline mt-1">Obtenha um livreto aqui</p>
-                <p className="mt-3">Artigo 143, Item VII da Resolução 6.033 de 21 de dezembro de 2023</p>
-              </div>
-              <div>
-                <p className="font-bold mb-3">Beneficiários de Passe Livre Idosos e ID Jovem</p>
-                <p className="leading-relaxed">É obrigatório o comparecimento para o embarque com pelo menos 30 minutos antes da hora da partida prevista. Também é obrigatória a apresentação dos documentos que comprovam o direito ao benefício no momento do embarque. O não cumprimento destas orientações poderá acarretar a perda do benefício.</p>
-                <p className="mt-3">Artigo 143, parágrafos 1º e 2º da Resolução 6.033 de 21 de dezembro de 2023</p>
+
+                {/* ORIGEM E DESTINO */}
+                <div className="border-b p-4">
+                  <div className="flex justify-between text-sm font-bold mb-2">
+                    <div>Origem: {reserva?.origemNome}</div>
+                    <div>Destino: {reserva?.destinoNome}</div>
+                  </div>
+                  <p className="text-center text-sm font-bold">Data: {reserva?.dataFormatada}</p>
+                </div>
+
+                {/* DADOS DA VIAGEM */}
+                <div className="border-b p-4 text-center">
+                  <div className="grid grid-cols-4 gap-3 mb-3 text-xs">
+                    <div className="text-left">
+                      <p><strong>Embarque:</strong> {reserva?.dataFormatada} {reserva?.horarioSaida}</p>
+                    </div>
+                    <div>
+                      <p><strong>Partida:</strong> {reserva?.dataFormatada} {reserva?.horarioSaida}</p>
+                    </div>
+                    <div>
+                      <p><strong>Chegada:</strong> {reserva?.dataFormatada} {reserva?.horarioChegada}</p>
+                    </div>
+                    <div className="text-right">
+                      <p><strong>Poltrona:</strong> {assento}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-3 text-xs mb-2">
+                    <div><p><strong>Serviço:</strong> {reserva?.servico}</p></div>
+                    <div><p><strong>Tipo:</strong> {reserva?.classe}</p></div>
+                    <div><p><strong>Prefixo:</strong> {reserva?.prefixo}</p></div>
+                  </div>
+                  
+                  <div className="text-xs">
+                    <p><strong>Linha:</strong> {reserva?.linha}</p>
+                    {reserva?.plataforma && <p className="mt-1"><strong>Plataforma:</strong> {reserva.plataforma}</p>}
+                  </div>
+                </div>
+
+                {/* VALORES (por assento) */}
+                <div className="border-b p-4 text-center text-xs">
+                  <div className="space-y-1">
+                    <p><strong>Tarifa:</strong> R$ {(reserva?.tarifa || 0).toFixed(2)}</p>
+                    <p><strong>Pedágio:</strong> R$ {(reserva?.pedagio || 0).toFixed(2)}</p>
+                    <p><strong>Embarque:</strong> R$ {(reserva?.taxaEmbarque || 0).toFixed(2)}</p>
+                    <p><strong>Seguro:</strong> R$ {(reserva?.seguro || 0).toFixed(2)}</p>
+                    <p><strong>Outros:</strong> R$ {(reserva?.outros || 0).toFixed(2)}</p>
+                    <p className="font-bold text-sm pt-2"><strong>Valor Total (este assento):</strong> R$ {((reserva?.total || 0) / numAssentos).toFixed(2)}</p>
+                    <p><strong>Desconto:</strong> R$ 0,00</p>
+                    <p className="font-bold text-sm"><strong>Valor a Pagar:</strong> R$ {((reserva?.total || 0) / numAssentos).toFixed(2)}</p>
+                    <p className="font-bold pt-2">FORMA PAGAMENTO: VALOR PAGO</p>
+                    <p><strong>Crédito DT:</strong> R$ {((reserva?.total || 0) / numAssentos).toFixed(2)}</p>
+                    <p><strong>Troco:</strong> R$ 0,00</p>
+                  </div>
+                </div>
+
+                {/* CHAVE BPe */}
+                <div className="border-b p-4 text-center">
+                  <p className="text-xs mb-1">Consulta pela Chave de Acesso em</p>
+                  <p className="text-xs text-blue-600">http://bpe.svrs.rs.gov.br/consulta</p>
+                  <p className="font-mono text-xs my-2">{chaveBpeFormatada}</p>
+                  <div className="flex justify-center my-3">
+                    {reserva?.qrCodeBpe && <QRCodeSVG value={reserva.qrCodeBpe} size={120} level="M" />}
+                  </div>
+                </div>
+
+                {/* QR CODE EMBARQUE E DADOS PASSAGEIRO */}
+                <div className="border-b p-4">
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="flex flex-col items-center">
+                      {reserva?.qrCode && <QRCodeSVG value={reserva.qrCode} size={140} level="M" />}
+                      <p className="font-bold text-sm mt-3">Embarque no Ônibus</p>
+                      <p className="text-xs">(Monitriip)</p>
+                    </div>
+                    <div className="text-xs">
+                      <p><strong>Passageiro(a)</strong> DOC {reserva?.passageiro?.documento} - {reserva?.passageiro?.nome?.toUpperCase()}</p>
+                      <p className="mt-2"><strong>TIPO DE DESCONTO</strong> Normal</p>
+                      <p><strong>Documento de desconto</strong> ---</p>
+                      <div className="mt-4 pt-3 border-t">
+                        <p><strong>BP-e nº:</strong> {reserva?.numeroBPe} <strong>Série:</strong> {reserva?.serie}</p>
+                        <p className="mt-1"><strong>Data de emissão:</strong> {reserva?.dataEmissao ? new Date(reserva.dataEmissao).toLocaleString('pt-BR') : ''}</p>
+                        <p className="mt-1"><strong>Protocolo de autorização:</strong> {reserva?.protocolo}</p>
+                        <p className="mt-1"><strong>Nº bilhete:</strong> {reserva?.numeroBilhete}</p>
+                        <p className="mt-1"><strong>Localizador:</strong> {localizadorAtual}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* QR CODE PORTÃO */}
+                {reserva?.qrCodeTaxaEmbarque && (
+                  <div className="border-b p-4 text-center">
+                    <QRCodeSVG value={reserva.qrCodeTaxaEmbarque} size={120} level="M" className="mx-auto" />
+                    <p className="font-bold text-sm mt-3">Acesso ao Portão de Embarque</p>
+                  </div>
+                )}
+
+                {/* RODAPÉ */}
+                <div className="p-4">
+                  <div className="grid grid-cols-2 gap-6 text-xs">
+                    <div>
+                      <p className="font-bold mb-3">Passageiro, consulte seus direitos e deveres</p>
+                      <div className="flex justify-center my-3">
+                        <QRCodeSVG value="https://www.goodtrip.com.br/direitos" size={80} level="M" />
+                      </div>
+                      <p className="mt-2">Aponte a câmera do seu celular ou acesse</p>
+                      <p className="text-blue-600 underline mt-1">Obtenha um livreto aqui</p>
+                      <p className="mt-3">Artigo 143, Item VII da Resolução 6.033 de 21 de dezembro de 2023</p>
+                    </div>
+                    <div>
+                      <p className="font-bold mb-3">Beneficiários de Passe Livre Idosos e ID Jovem</p>
+                      <p className="leading-relaxed">É obrigatório o comparecimento para o embarque com pelo menos 30 minutos antes da hora da partida prevista. Também é obrigatória a apresentação dos documentos que comprovam o direito ao benefício no momento do embarque. O não cumprimento destas orientações poderá acarretar a perda do benefício.</p>
+                      <p className="mt-3">Artigo 143, parágrafos 1º e 2º da Resolução 6.033 de 21 de dezembro de 2023</p>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
-          </div>
-
-        </div>
+          );
+        })}
       </main>
     </>
   );

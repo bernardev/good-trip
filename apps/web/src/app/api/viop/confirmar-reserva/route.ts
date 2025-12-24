@@ -6,20 +6,19 @@ const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
 const AUTH = "Basic R09PRFRSSVBBUEk6QGcxdDIj";
 
-const MODO_TESTE = false;
-
 type ReservaData = {
   servico: string;
   origem: string;
   destino: string;
   data: string;
   assentos: string[];
-  passageiro: {
+  passageiros: Array<{
+    assento: string;
     nome: string;
     sobrenome: string;
     documento: string;
     email: string;
-  };
+  }>;
   preco: number;
 };
 
@@ -36,6 +35,63 @@ type BloqueioResponse = {
   classeServicoId?: number;
 };
 
+type CabecalhoAgencia = {
+  razaoSocial?: string;
+  cnpj?: string;
+  endereco?: string;
+  numero?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+};
+
+type CabecalhoEmitente = {
+  razaoSocial?: string;
+  cnpj?: string;
+  inscricaoEstadual?: string;
+  endereco?: string;
+  numero?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+  cep?: string;
+};
+
+type ConfirmacaoResponse = {
+  localizador: string;
+  numeroBilhete: string;
+  numeroSistema: string;
+  poltrona: string;
+  servico: string;
+  descOrigem?: string;
+  descDestino?: string;
+  nome: string;
+  documento: string;
+  bpe?: {
+    chaveBpe?: string;
+    codigoMonitriipBPe?: string;
+    qrcodeBpe?: string;
+    tarifa?: string;
+    pedagio?: string;
+    taxaEmbarque?: string;
+    seguro?: string;
+    outros?: string;
+    numeroBpe?: string;
+    serie?: string;
+    protocoloAutorizacao?: string;
+    dataAutorizacao?: string;
+    prefixo?: string;
+    plataforma?: string;
+    linha?: string;
+    classe?: string;
+    cabecalhoAgencia?: CabecalhoAgencia;
+    cabecalhoEmitente?: CabecalhoEmitente;
+    dataHoraEmbarqueInicio?: string;
+    dataHoraEmbarqueFim?: string;
+  };
+  cupomTaxaEmbarque?: string;
+};
+
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
@@ -43,7 +99,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { orderId, status } = body;
 
-    console.log('📝 Iniciando emissão de bilhete:', { orderId, status, MODO_TESTE });
+    console.log('📝 Iniciando emissão de bilhete:', { orderId, status });
 
     if (status !== 'paid' && status !== 'approved') {
       return NextResponse.json(
@@ -61,144 +117,91 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (MODO_TESTE) {
-      console.log('🧪 MODO TESTE - Simulando emissão de bilhete...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    // 🔥 Processar múltiplos assentos
+    console.log(`🎫 Processando ${reservaData.assentos.length} assento(s)...`);
+    
+    const bilhetesEmitidos: ConfirmacaoResponse[] = [];
+    let primeiroBloqueioDados: BloqueioResponse | null = null;
 
-      const localizadorSimulado = `TEST-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      
-      return NextResponse.json({
-        localizador: localizadorSimulado,
-        status: 'CONFIRMADO',
-        numeroBilhete: `SIM-${Date.now()}`,
-        numeroSistema: `${Date.now()}`,
-        poltrona: reservaData.assentos[0],
-        servico: reservaData.servico,
-        total: reservaData.preco * reservaData.assentos.length,
-        origemNome: "ITAITUBA - PA",
-        destinoNome: "KM 30 (CAMPO VERDE) - PA",
-        data: reservaData.data,
-        dataFormatada: new Date(reservaData.data).toLocaleDateString('pt-BR'),
-        horarioSaida: "14:40",
-        horarioChegada: "15:30",
-        duracaoFormatada: "50min",
-        empresa: "VIACAO OURO E PRATA S.A.",
-        classe: "SEMILEITO",
-        assentos: reservaData.assentos,
-        passageiro: {
-          nome: `${reservaData.passageiro.nome} ${reservaData.passageiro.sobrenome}`,
-          documento: reservaData.passageiro.documento,
-          email: reservaData.passageiro.email,
-        },
-        chaveBpe: 'SIMULADO_CHAVE_BPE_123456789',
-        qrCode: 'SIMULADO_QR_MONITRIIP',
-        qrCodeBpe: 'https://exemplo.com/qr-code-simulado.png',
-        qrCodeTaxaEmbarque: 'SIMULADO_QR_TAXA_EMBARQUE',
-        tarifa: 33.00,
-        pedagio: 0,
-        taxaEmbarque: 5,
-        seguro: 1.5,
-        outros: 0,
-        numeroBPe: "999999",
-        serie: "001",
-        protocolo: "999999999999999",
-        dataEmissao: new Date().toISOString(),
-        prefixo: "RSPA0088022",
-        plataforma: "3",
-        linha: "PORTO ALEGRE(RS)-SANTAREM(PA)",
-        cabecalhoAgencia: {
-          razaoSocial: "GOOD TRIP TRANSPORTE E TURISMO LTDA",
-          cnpj: "38.627.614/0001-70",
-          endereco: "AG GETULIO VARGAS",
-          numero: "519",
-          bairro: "CENTRO",
-          cidade: "ITAITUBA",
-          uf: "PA"
-        },
-        cabecalhoEmitente: {
-          razaoSocial: "VIACAO OURO E PRATA S.A.",
-          cnpj: "92954106004725",
-          inscricaoEstadual: "154581976",
-          endereco: "TV DUQUE DE CAXIAS",
-          numero: "200",
-          bairro: "AMPARO",
-          cidade: "SANTAREM",
-          uf: "PA",
-          cep: "68035620"
-        },
-        dataHoraEmbarqueInicio: "27/12/2025 14:25",
-        dataHoraEmbarqueFim: "27/12/2025 14:39",
-        _teste: true,
-      });
+    for (let i = 0; i < reservaData.assentos.length; i++) {
+      const assento = reservaData.assentos[i];
+      console.log(`\n🔒 [${i + 1}/${reservaData.assentos.length}] Bloqueando assento ${assento}...`);
+
+      const bloqueio = await bloquearPoltronaIndividual(reservaData, assento);
+
+      if (!bloqueio.transacao) {
+        throw new Error(`Bloqueio não retornou transacao para assento ${assento}`);
+      }
+
+      if (i === 0) {
+        primeiroBloqueioDados = bloqueio;
+      }
+
+      console.log(`✅ Assento ${assento} bloqueado! Transacao: ${bloqueio.transacao}`);
+
+      // 🔥 Usar dados do passageiro correto para este assento
+      const passageiroAssento = reservaData.passageiros.find(p => p.assento === assento) || reservaData.passageiros[i];
+
+      console.log(`💳 Confirmando venda do assento ${assento}...`);
+      const confirmacao = await confirmarVenda(reservaData, bloqueio, passageiroAssento);
+
+      if (!confirmacao.localizador) {
+        throw new Error(`Venda não retornou localizador para assento ${assento}`);
+      }
+
+      console.log(`🎉 Bilhete emitido! Localizador: ${confirmacao.localizador}`);
+      bilhetesEmitidos.push(confirmacao);
     }
 
-    // 🔒 PASSO 1: Bloquear Poltrona
-    console.log('🔒 Bloqueando poltrona na VIOP...');
-    const bloqueio = await bloquearPoltrona(reservaData);
+    console.log(`\n✅ Todos os ${bilhetesEmitidos.length} bilhetes foram emitidos com sucesso!`);
 
-    if (!bloqueio.transacao) {
-      throw new Error('Bloqueio não retornou transacao');
-    }
+    const primeiroBilhete = bilhetesEmitidos[0];
+    const bloqueioRef = primeiroBloqueioDados!;
 
-    console.log('✅ Poltrona bloqueada! Transacao:', bloqueio.transacao);
-    console.log('⏱️  Duração do bloqueio:', bloqueio.duracao, 'segundos');
-
-    // 💳 PASSO 2: Confirmar Venda (emitir bilhete)
-    console.log('💳 Confirmando venda e emitindo bilhete...');
-    const confirmacao = await confirmarVenda(reservaData, bloqueio);
-
-    if (!confirmacao.localizador) {
-      throw new Error('Venda não retornou localizador');
-    }
-
-    console.log('🎉 BILHETE EMITIDO! Localizador:', confirmacao.localizador);
-
-    // 🔥 Retornar dados completos para o frontend
     return NextResponse.json({
-      localizador: confirmacao.localizador,
+      localizador: primeiroBilhete.localizador,
       status: 'CONFIRMADO',
-      numeroBilhete: confirmacao.numeroBilhete,
-      numeroSistema: confirmacao.numeroSistema,
-      poltrona: confirmacao.poltrona,
-      servico: confirmacao.servico,
+      numeroBilhete: primeiroBilhete.numeroBilhete,
+      numeroSistema: primeiroBilhete.numeroSistema,
+      poltrona: primeiroBilhete.poltrona,
+      servico: primeiroBilhete.servico,
       total: reservaData.preco * reservaData.assentos.length,
-      origemNome: confirmacao.descOrigem || bloqueio.origem?.cidade,
-      destinoNome: confirmacao.descDestino || bloqueio.destino?.cidade,
+      origemNome: primeiroBilhete.descOrigem || bloqueioRef.origem?.cidade,
+      destinoNome: primeiroBilhete.descDestino || bloqueioRef.destino?.cidade,
       data: reservaData.data,
       dataFormatada: new Date(reservaData.data).toLocaleDateString('pt-BR'),
-      horarioSaida: bloqueio.dataSaida?.split(' ')[1] || '',
-      horarioChegada: bloqueio.dataChegada?.split(' ')[1] || '',
-      duracaoFormatada: calcularDuracao(bloqueio.dataSaida, bloqueio.dataChegada),
-      empresa: confirmacao.bpe?.linha || bloqueio.linha,
-      classe: confirmacao.bpe?.classe || getClasseNome(bloqueio.classeServicoId),
-      assentos: [confirmacao.poltrona],
+      horarioSaida: bloqueioRef.dataSaida?.split(' ')[1] || '',
+      horarioChegada: bloqueioRef.dataChegada?.split(' ')[1] || '',
+      duracaoFormatada: calcularDuracao(bloqueioRef.dataSaida, bloqueioRef.dataChegada),
+      empresa: primeiroBilhete.bpe?.linha || bloqueioRef.linha,
+      classe: primeiroBilhete.bpe?.classe || getClasseNome(bloqueioRef.classeServicoId),
+      assentos: bilhetesEmitidos.map(b => b.poltrona),
+      localizadores: bilhetesEmitidos.map(b => b.localizador),
       passageiro: {
-        nome: confirmacao.nome,
-        documento: confirmacao.documento,
-        email: reservaData.passageiro.email,
+        nome: primeiroBilhete.nome,
+        documento: primeiroBilhete.documento,
+        email: reservaData.passageiros[0]?.email || '',
       },
-      // 🔥 DADOS DO BPe
-      chaveBpe: confirmacao.bpe?.chaveBpe,
-      qrCode: confirmacao.bpe?.codigoMonitriipBPe, // QR Code embarque ônibus (Monitriip)
-      qrCodeBpe: confirmacao.bpe?.qrcodeBpe, // QR Code fiscal
-      qrCodeTaxaEmbarque: confirmacao.cupomTaxaEmbarque, // QR Code taxa embarque rodoviária
-      tarifa: parseFloat(confirmacao.bpe?.tarifa || '0'),
-      pedagio: parseFloat(confirmacao.bpe?.pedagio || '0'),
-      taxaEmbarque: parseFloat(confirmacao.bpe?.taxaEmbarque || '0'),
-      seguro: parseFloat(confirmacao.bpe?.seguro || '0'),
-      outros: parseFloat(confirmacao.bpe?.outros || '0'),
-      numeroBPe: confirmacao.bpe?.numeroBpe,
-      serie: confirmacao.bpe?.serie,
-      protocolo: confirmacao.bpe?.protocoloAutorizacao,
-      dataEmissao: confirmacao.bpe?.dataAutorizacao,
-      // 🔥 NOVOS CAMPOS ADICIONADOS
-      prefixo: confirmacao.bpe?.prefixo,
-      plataforma: confirmacao.bpe?.plataforma,
-      linha: confirmacao.bpe?.linha,
-      cabecalhoAgencia: confirmacao.bpe?.cabecalhoAgencia,
-      cabecalhoEmitente: confirmacao.bpe?.cabecalhoEmitente,
-      dataHoraEmbarqueInicio: confirmacao.bpe?.dataHoraEmbarqueInicio,
-      dataHoraEmbarqueFim: confirmacao.bpe?.dataHoraEmbarqueFim,
+      chaveBpe: primeiroBilhete.bpe?.chaveBpe,
+      qrCode: primeiroBilhete.bpe?.codigoMonitriipBPe,
+      qrCodeBpe: primeiroBilhete.bpe?.qrcodeBpe,
+      qrCodeTaxaEmbarque: primeiroBilhete.cupomTaxaEmbarque,
+      tarifa: parseFloat(primeiroBilhete.bpe?.tarifa || '0'),
+      pedagio: parseFloat(primeiroBilhete.bpe?.pedagio || '0'),
+      taxaEmbarque: parseFloat(primeiroBilhete.bpe?.taxaEmbarque || '0'),
+      seguro: parseFloat(primeiroBilhete.bpe?.seguro || '0'),
+      outros: parseFloat(primeiroBilhete.bpe?.outros || '0'),
+      numeroBPe: primeiroBilhete.bpe?.numeroBpe,
+      serie: primeiroBilhete.bpe?.serie,
+      protocolo: primeiroBilhete.bpe?.protocoloAutorizacao,
+      dataEmissao: primeiroBilhete.bpe?.dataAutorizacao,
+      prefixo: primeiroBilhete.bpe?.prefixo,
+      plataforma: primeiroBilhete.bpe?.plataforma,
+      linha: primeiroBilhete.bpe?.linha,
+      cabecalhoAgencia: primeiroBilhete.bpe?.cabecalhoAgencia,
+      cabecalhoEmitente: primeiroBilhete.bpe?.cabecalhoEmitente,
+      dataHoraEmbarqueInicio: primeiroBilhete.bpe?.dataHoraEmbarqueInicio,
+      dataHoraEmbarqueFim: primeiroBilhete.bpe?.dataHoraEmbarqueFim,
       _teste: false,
     });
 
@@ -214,8 +217,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// 🔒 PASSO 1: Bloquear Poltrona
-async function bloquearPoltrona(reserva: ReservaData) {
+async function bloquearPoltronaIndividual(reserva: ReservaData, assento: string): Promise<BloqueioResponse> {
   const url = `${VIOP_BASE}/bloqueiopoltrona/bloquearPoltrona`;
   
   const payload = {
@@ -223,7 +225,7 @@ async function bloquearPoltrona(reserva: ReservaData) {
     destino: parseInt(reserva.destino),
     data: reserva.data,
     servico: parseInt(reserva.servico),
-    poltrona: reserva.assentos[0],
+    poltrona: assento,
     volta: false,
   };
 
@@ -243,7 +245,7 @@ async function bloquearPoltrona(reserva: ReservaData) {
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     console.error('❌ Erro ao bloquear:', res.status, text);
-    throw new Error(`Erro ao bloquear poltrona: ${res.status}`);
+    throw new Error(`Erro ao bloquear poltrona ${assento}: ${res.status}`);
   }
 
   const response = await res.json();
@@ -252,16 +254,20 @@ async function bloquearPoltrona(reserva: ReservaData) {
   return response;
 }
 
-// 💳 PASSO 2: Confirmar Venda
-async function confirmarVenda(reserva: ReservaData, bloqueioResponse: BloqueioResponse) {
+// 🔥 Confirmar venda com dados do passageiro correto
+async function confirmarVenda(
+  reserva: ReservaData, 
+  bloqueioResponse: BloqueioResponse,
+  passageiro: ReservaData['passageiros'][0]
+): Promise<ConfirmacaoResponse> {
   const url = `${VIOP_BASE}/confirmavenda/confirmarVenda`;
   
   const payload = {
     transacao: bloqueioResponse.transacao,
-    nomePassageiro: `${reserva.passageiro.nome} ${reserva.passageiro.sobrenome}`,
-    documentoPassageiro: reserva.passageiro.documento,
+    nomePassageiro: `${passageiro.nome} ${passageiro.sobrenome}`,
+    documentoPassageiro: passageiro.documento,
     tipoDocumentoPassageiro: "CPF",
-    email: reserva.passageiro.email,
+    email: passageiro.email,
     telefone: "41999999999",
     idFormaPagamento: 1,
     numOperacion: bloqueioResponse.numOperacion,

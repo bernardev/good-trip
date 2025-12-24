@@ -1,0 +1,17 @@
+{
+  "servico": "1110",
+  "origem": "10102",
+  "destino": "21757",
+  "data": "2025-12-27",
+  "assentos": [
+    "44",
+    "45"
+  ],
+  "passageiro": {
+    "nome": "Jucelino",
+    "sobrenome": "Alves",
+    "documento": "79469426215",
+    "email": "jucelino@goodtrip-itb.com"
+  },
+  "preco": 39.5
+}

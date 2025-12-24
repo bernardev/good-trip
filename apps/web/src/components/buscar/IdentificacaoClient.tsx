@@ -31,14 +31,16 @@ type Meta = {
   classe?: string;
   saida?: string;
   chegada?: string;
-  origemNome?: string;   // 🔥 NOVO
-  destinoNome?: string;  // 🔥 NOVO
+  origemNome?: string;
+  destinoNome?: string;
 };
 
 type Props = { query: Query; meta?: Meta };
 
 type DocTipo = "CPF" | "RG" | "Passaporte";
+
 type PassageiroForm = {
+  assento: string;
   nome: string;
   sobrenome: string;
   docTipo: DocTipo;
@@ -54,7 +56,6 @@ const fmtBRL = (v: number) =>
 
 const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
-// 🔥 NOVO: Formatar data YYYY-MM-DD para DD/MM/YYYY
 function fmtDate(ymd: string): string {
   const [y, m, d] = ymd.split('-').map(Number);
   if (!y || !m || !d) return ymd;
@@ -68,7 +69,6 @@ function fmtDate(ymd: string): string {
 
 /** ===== Componente ===== */
 export default function IdentificacaoClient({ query, meta }: Props) {
-  // timer (10 min) 🔥 ALTERADO de 40 para 10
   const [secsLeft, setSecsLeft] = useState<number>(10 * 60);
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -79,15 +79,20 @@ export default function IdentificacaoClient({ query, meta }: Props) {
   const mm = Math.floor(secsLeft / 60);
   const ss = secsLeft % 60;
 
-  const [form, setForm] = useState<PassageiroForm>({
-    nome: "",
-    sobrenome: "",
-    docTipo: "CPF",
-    docNumero: "",
-    nacionalidade: "Brasil",
-    email: "",
-    emailConfirm: "",
-  });
+  // 🔥 Estado para múltiplos passageiros (um por assento)
+  const [passageiros, setPassageiros] = useState<PassageiroForm[]>(
+    query.assentos.map(assento => ({
+      assento,
+      nome: "",
+      sobrenome: "",
+      docTipo: "CPF" as DocTipo,
+      docNumero: "",
+      nacionalidade: "Brasil",
+      email: "",
+      emailConfirm: "",
+    }))
+  );
+
   const [terms, setTerms] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -99,15 +104,26 @@ export default function IdentificacaoClient({ query, meta }: Props) {
     return meta?.preco;
   }, [meta?.preco, query.assentos]);
 
-  function set<K extends keyof PassageiroForm>(key: K, val: PassageiroForm[K]) {
-    setForm((s) => ({ ...s, [key]: val }));
+  // 🔥 Atualizar dados de um passageiro específico
+  function setPassageiro(index: number, key: keyof PassageiroForm, val: string | DocTipo) {
+    setPassageiros(prev => prev.map((p, i) => 
+      i === index ? {...p, [key]: val} : p
+    ));
   }
 
+  // 🔥 Validar todos os passageiros
   function validate(): string | null {
-    if (!form.nome.trim() || !form.sobrenome.trim()) return "Preencha nome e sobrenome.";
-    if (!form.docNumero.trim()) return "Informe o número do documento.";
-    if (!form.email.trim() || !form.emailConfirm.trim()) return "Informe e confirme o e-mail.";
-    if (form.email !== form.emailConfirm) return "Os e-mails não conferem.";
+    for (let i = 0; i < passageiros.length; i++) {
+      const p = passageiros[i];
+      if (!p.nome.trim() || !p.sobrenome.trim()) 
+        return `Passageiro ${i+1} (Assento ${p.assento}): Preencha nome e sobrenome.`;
+      if (!p.docNumero.trim()) 
+        return `Passageiro ${i+1} (Assento ${p.assento}): Informe o documento.`;
+      if (!p.email.trim() || !p.emailConfirm.trim()) 
+        return `Passageiro ${i+1} (Assento ${p.assento}): Informe os e-mails.`;
+      if (p.email !== p.emailConfirm) 
+        return `Passageiro ${i+1} (Assento ${p.assento}): E-mails não conferem.`;
+    }
     if (!terms) return "Aceite os Termos e Condições para continuar.";
     return null;
   }
@@ -129,12 +145,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
         destino: query.destino,
         data: query.data,
         assentos: query.assentos.join(","),
-        nome: form.nome,
-        sobrenome: form.sobrenome,
-        docTipo: form.docTipo,
-        docNumero: form.docNumero,
-        nacionalidade: form.nacionalidade,
-        email: form.email,
+        passageiros: JSON.stringify(passageiros), // 🔥 Enviar array de passageiros
         ...(typeof meta?.preco === "number" ? { preco: String(meta.preco) } : {}),
       });
       window.location.href = `/buscar-viop/pagamento?${params.toString()}`;
@@ -143,13 +154,12 @@ export default function IdentificacaoClient({ query, meta }: Props) {
     }
   }
 
-  // 🔥 Usar nomes das cidades do meta
   const origemDisplay = meta?.origemNome || query.origem;
   const destinoDisplay = meta?.destinoNome || query.destino;
 
   return (
     <section className="p-6 md:p-8">
-      {/* Topo: Timer */}
+      {/* Timer */}
       <div className="mb-6">
         <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-2xl px-6 py-4">
           <div className="flex items-center justify-between">
@@ -176,73 +186,76 @@ export default function IdentificacaoClient({ query, meta }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
         {/* Esquerda: Formulário */}
         <form onSubmit={onSubmit} className="space-y-6">
-          {/* Card: Passageiro */}
-          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg overflow-hidden">
-            <header className="bg-gradient-to-r from-blue-600 to-sky-600 px-6 py-4">
-              <h2 className="text-lg font-black text-white">Dados do Passageiro</h2>
-              <p className="text-sm text-blue-100">Passageiro 1</p>
-            </header>
+          
+          {/* 🔥 LOOP: Um card para cada passageiro */}
+          {passageiros.map((passageiro, index) => (
+            <div key={index} className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg overflow-hidden">
+              <header className="bg-gradient-to-r from-blue-600 to-sky-600 px-6 py-4">
+                <h2 className="text-lg font-black text-white">Passageiro {index + 1}</h2>
+                <p className="text-sm text-blue-100">Assento {passageiro.assento}</p>
+              </header>
 
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field
-                  label="Nome*"
-                  icon={<User2 className="w-4 h-4" />}
-                  value={form.nome}
-                  onChange={(v) => set("nome", v)}
-                />
-                <Field
-                  label="Sobrenome*"
-                  icon={<User2 className="w-4 h-4" />}
-                  value={form.sobrenome}
-                  onChange={(v) => set("sobrenome", v)}
-                />
-              </div>
+              <div className="p-6 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field
+                    label="Nome*"
+                    icon={<User2 className="w-4 h-4" />}
+                    value={passageiro.nome}
+                    onChange={(v) => setPassageiro(index, "nome", v)}
+                  />
+                  <Field
+                    label="Sobrenome*"
+                    icon={<User2 className="w-4 h-4" />}
+                    value={passageiro.sobrenome}
+                    onChange={(v) => setPassageiro(index, "sobrenome", v)}
+                  />
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-[170px_1fr_170px] gap-4">
-                <Select
-                  label="Tipo de documento*"
-                  icon={<Hash className="w-4 h-4" />}
-                  value={form.docTipo}
-                  onChange={(v) => set("docTipo", v as DocTipo)}
-                  options={[
-                    { label: "CPF", value: "CPF" },
-                    { label: "RG", value: "RG" },
-                    { label: "Passaporte", value: "Passaporte" },
-                  ]}
-                />
-                <Field
-                  label="Número do documento*"
-                  icon={<Hash className="w-4 h-4" />}
-                  value={form.docNumero}
-                  onChange={(v) => set("docNumero", v)}
-                />
-                <Field
-                  label="Cidadania*"
-                  icon={<ShieldCheck className="w-4 h-4" />}
-                  value={form.nacionalidade}
-                  onChange={(v) => set("nacionalidade", v)}
-                />
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-[170px_1fr_170px] gap-4">
+                  <Select
+                    label="Tipo de documento*"
+                    icon={<Hash className="w-4 h-4" />}
+                    value={passageiro.docTipo}
+                    onChange={(v) => setPassageiro(index, "docTipo", v as DocTipo)}
+                    options={[
+                      { label: "CPF", value: "CPF" },
+                      { label: "RG", value: "RG" },
+                      { label: "Passaporte", value: "Passaporte" },
+                    ]}
+                  />
+                  <Field
+                    label="Número do documento*"
+                    icon={<Hash className="w-4 h-4" />}
+                    value={passageiro.docNumero}
+                    onChange={(v) => setPassageiro(index, "docNumero", v)}
+                  />
+                  <Field
+                    label="Cidadania*"
+                    icon={<ShieldCheck className="w-4 h-4" />}
+                    value={passageiro.nacionalidade}
+                    onChange={(v) => setPassageiro(index, "nacionalidade", v)}
+                  />
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field
-                  type="email"
-                  label="E-mail*"
-                  icon={<Mail className="w-4 h-4" />}
-                  value={form.email}
-                  onChange={(v) => set("email", v)}
-                />
-                <Field
-                  type="email"
-                  label="Confirmar e-mail*"
-                  icon={<Mail className="w-4 h-4" />}
-                  value={form.emailConfirm}
-                  onChange={(v) => set("emailConfirm", v)}
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field
+                    type="email"
+                    label="E-mail*"
+                    icon={<Mail className="w-4 h-4" />}
+                    value={passageiro.email}
+                    onChange={(v) => setPassageiro(index, "email", v)}
+                  />
+                  <Field
+                    type="email"
+                    label="Confirmar e-mail*"
+                    icon={<Mail className="w-4 h-4" />}
+                    value={passageiro.emailConfirm}
+                    onChange={(v) => setPassageiro(index, "emailConfirm", v)}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          ))}
 
           {/* Card: Assentos */}
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-6">
@@ -309,7 +322,6 @@ export default function IdentificacaoClient({ query, meta }: Props) {
             </header>
 
             <div className="p-6 space-y-4">
-              {/* Rota */}
               <div>
                 <div className="flex items-center gap-2 text-blue-600 mb-2">
                   <MapPin className="w-5 h-5" />
@@ -320,13 +332,11 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                 </p>
               </div>
 
-              {/* Data */}
               <div className="flex items-center gap-2 text-gray-700">
                 <Calendar className="w-5 h-5 text-blue-600" />
                 <span className="font-semibold">{fmtDate(query.data)}</span>
               </div>
 
-              {/* Horários */}
               <div className="grid grid-cols-3 gap-2 bg-gradient-to-br from-blue-50 to-sky-50 rounded-xl p-4 border border-blue-200">
                 <div className="text-center">
                   <p className="text-xs text-gray-600 mb-1">Saída</p>
@@ -342,10 +352,8 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                 </div>
               </div>
 
-              {/* Divider */}
               <div className="border-t-2 border-dashed border-gray-200" />
 
-              {/* Valores */}
               <div className="space-y-2">
                 <div className="flex justify-between text-gray-700">
                   <span>Passageiros</span>
@@ -365,7 +373,6 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                 )}
               </div>
 
-              {/* Selo segurança */}
               <div className="bg-green-50 border-2 border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-green-600" />
                 <span className="text-xs text-green-800 font-semibold">

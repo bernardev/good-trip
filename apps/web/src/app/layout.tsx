@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 import { DM_Sans } from "next/font/google";
 import IntroReveal from "@/components/IntroReveal";
 import type { ReactNode } from "react";
-import { Providers } from "../providers"; // ← usa SessionProvider
+import { Providers } from "../providers";
 
 const dmSans = DM_Sans({ subsets: ["latin"] });
 
@@ -16,6 +16,7 @@ export const metadata: Metadata = {
 };
 
 const GTM_ID = "GTM-TGXL5FVV";
+const GA_ID = "G-QTXQ8TF8RG";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -32,7 +33,21 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           `}
         </Script>
         {/* End Google Tag Manager */}
-        {/* Distribusion SDK assets */}
+
+        {/* Google Analytics (GA4) */}
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_ID}');
+          `}
+        </Script>
+        {/* End Google Analytics */}
       </head>
       <body className={`${dmSans.className} min-h-dvh antialiased bg-bg text-ink overflow-x-hidden`}>
         {/* Google Tag Manager (noscript) */}
@@ -45,7 +60,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           />
         </noscript>
         {/* End Google Tag Manager (noscript) */}
-
+        
         <Providers>
           <IntroReveal />
           <Header />

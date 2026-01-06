@@ -3,9 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  BadgeCheck,
   Calendar,
-  CreditCard,
   Hash,
   Mail,
   MapPin,
@@ -15,7 +13,10 @@ import {
   Ticket,
   ArrowRight,
   Phone,
+  Clock,
+  Info,
 } from "lucide-react";
+import { getObservacaoRota, getCorObservacao } from '@/lib/observacoes-rotas';
 
 /** ===== Tipos ===== */
 type Query = {
@@ -65,6 +66,15 @@ function fmtDate(ymd: string): string {
     month: "2-digit", 
     year: "numeric" 
   });
+}
+
+function fmtTime(isoOrHm?: string | null): string {
+  if (!isoOrHm) return "--:--";
+  const d = new Date(isoOrHm);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return isoOrHm;
 }
 
 /** ===== Componente ===== */
@@ -154,14 +164,21 @@ export default function IdentificacaoClient({ query, meta }: Props) {
   const origemDisplay = meta?.origemNome || query.origem;
   const destinoDisplay = meta?.destinoNome || query.destino;
 
+  // 🔥 NOVO: Buscar observação da rota
+  const observacao = getObservacaoRota(
+    origemDisplay,
+    destinoDisplay,
+    meta?.saida || ''
+  );
+
   return (
     <section className="p-6 md:p-8">
       {/* Timer */}
       <div className="mb-6">
         <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-2xl px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-400 rounded-xl">
+              <div className="p-2 bg-yellow-400 rounded-xl flex-shrink-0">
                 <Timer className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -179,8 +196,8 @@ export default function IdentificacaoClient({ query, meta }: Props) {
         </div>
       </div>
 
-      {/* Layout principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
+      {/* Layout principal - GRID MAIS LARGO */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-8">
         {/* Esquerda: Formulário */}
         <form onSubmit={onSubmit} className="space-y-6">
           
@@ -203,10 +220,10 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                   />
                 </div>
 
-                {/* Documentos - Grid 3 colunas */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Documentos - Grid 3 colunas iguais */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Select
-                    label="Tipo de documento*"
+                    label="Tipo*"
                     icon={<Hash className="w-4 h-4" />}
                     value={passageiro.docTipo}
                     onChange={(v) => setPassageiro(index, "docTipo", v as DocTipo)}
@@ -217,7 +234,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                     ]}
                   />
                   <Field
-                    label="Número do documento*"
+                    label="Nº Documento*"
                     icon={<Hash className="w-4 h-4" />}
                     value={passageiro.docNumero}
                     onChange={(v) => setPassageiro(index, "docNumero", v)}
@@ -231,7 +248,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                 </div>
 
                 {/* Contato - Grid 2 colunas */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field
                     type="tel"
                     label="Telefone/WhatsApp*"
@@ -277,10 +294,10 @@ export default function IdentificacaoClient({ query, meta }: Props) {
 
           {/* Card: Termos + Enviar */}
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-6">
-            <label className="flex items-start gap-3 text-sm text-gray-700">
+            <label className="flex items-start gap-3 text-sm text-gray-700 cursor-pointer">
               <input
                 type="checkbox"
-                className="mt-1 h-4 w-4 rounded"
+                className="mt-1 h-4 w-4 rounded cursor-pointer"
                 checked={terms}
                 onChange={(e) => setTerms(e.target.checked)}
               />
@@ -310,58 +327,79 @@ export default function IdentificacaoClient({ query, meta }: Props) {
           </div>
         </form>
 
-        {/* Direita: Resumo Sticky */}
-        <aside className="lg:sticky lg:top-6 h-fit">
+        {/* Direita: Resumo Sticky - MAIS ESTREITO */}
+        <aside className="xl:sticky xl:top-6 h-fit">
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-xl overflow-hidden">
             <header className="bg-gradient-to-r from-blue-600 to-sky-600 px-6 py-4">
               <h2 className="text-lg font-black text-white">Resumo da Viagem</h2>
             </header>
 
             <div className="p-6 space-y-4">
+              {/* Rota */}
               <div>
                 <div className="flex items-center gap-2 text-blue-600 mb-2">
                   <MapPin className="w-5 h-5" />
                   <span className="text-sm font-bold">Rota</span>
                 </div>
-                <p className="font-black text-gray-900 text-lg">
+                <p className="font-black text-gray-900 text-base leading-tight">
                   {origemDisplay} → {destinoDisplay}
                 </p>
               </div>
 
+              {/* Data */}
               <div className="flex items-center gap-2 text-gray-700">
                 <Calendar className="w-5 h-5 text-blue-600" />
-                <span className="font-semibold">{fmtDate(query.data)}</span>
+                <span className="font-semibold text-sm">{fmtDate(query.data)}</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 bg-gradient-to-br from-blue-50 to-sky-50 rounded-xl p-4 border border-blue-200">
+              {/* 🔥 NOVO: Observação da rota */}
+              {observacao && (
+                <div className={`px-3 py-2 rounded-lg border flex items-start gap-2 ${getCorObservacao(observacao.tipo)}`}>
+                  <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs leading-tight">
+                    <div className="font-bold">Atenção!</div>
+                    <div>{observacao.icone} {observacao.texto}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Grid Horários - 🔥 AGORA COM DADOS CORRETOS */}
+              <div className="grid grid-cols-3 gap-2 bg-gradient-to-br from-blue-50 to-sky-50 rounded-xl p-3 border border-blue-200">
                 <div className="text-center">
-                  <p className="text-xs text-gray-600 mb-1">Saída</p>
-                  <p className="font-black text-gray-900">{meta?.saida ?? "--:--"}</p>
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Clock className="w-3 h-3 text-blue-600" />
+                    <p className="text-xs text-gray-600 font-semibold">Saída</p>
+                  </div>
+                  <p className="font-black text-gray-900 text-sm">{fmtTime(meta?.saida)}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs text-gray-600 mb-1">Chegada</p>
-                  <p className="font-black text-gray-900">{meta?.chegada ?? "--:--"}</p>
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Clock className="w-3 h-3 text-blue-600" />
+                    <p className="text-xs text-gray-600 font-semibold">Chegada</p>
+                  </div>
+                  <p className="font-black text-gray-900 text-sm">{fmtTime(meta?.chegada)}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs text-gray-600 mb-1">Classe</p>
-                  <p className="font-black text-gray-900">{meta?.classe ?? "—"}</p>
+                  <p className="text-xs text-gray-600 font-semibold mb-1">Classe</p>
+                  <p className="font-black text-gray-900 text-xs">{meta?.classe ?? "—"}</p>
                 </div>
               </div>
 
               <div className="border-t-2 border-dashed border-gray-200" />
 
+              {/* Valores */}
               <div className="space-y-2">
-                <div className="flex justify-between text-gray-700">
+                <div className="flex justify-between text-gray-700 text-sm">
                   <span>Passageiros</span>
                   <span className="font-semibold">{Math.max(1, query.assentos.length)}</span>
                 </div>
                 {typeof meta?.preco === "number" && (
                   <>
-                    <div className="flex justify-between text-gray-700">
-                      <span>Preço por passageiro</span>
+                    <div className="flex justify-between text-gray-700 text-sm">
+                      <span>Preço/passageiro</span>
                       <span className="font-semibold">{fmtBRL(meta.preco)}</span>
                     </div>
-                    <div className="flex justify-between text-xl font-black text-blue-600">
+                    <div className="flex justify-between text-lg font-black text-blue-600">
                       <span>Total</span>
                       <span>{fmtBRL(precoSubtotal ?? meta.preco)}</span>
                     </div>
@@ -369,9 +407,10 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                 )}
               </div>
 
+              {/* Badge Segurança */}
               <div className="bg-green-50 border-2 border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-green-600" />
-                <span className="text-xs text-green-800 font-semibold">
+                <ShieldCheck className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <span className="text-xs text-green-800 font-semibold leading-tight">
                   Compra 100% segura e protegida
                 </span>
               </div>

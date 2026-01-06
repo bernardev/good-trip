@@ -2,7 +2,8 @@
 
 import { UnifiedTrip } from '@/types/unified-trip';
 import { format } from 'date-fns';
-import { Clock, MapPin, Users, Bus } from 'lucide-react';
+import { Clock, MapPin, Users, Bus, Info } from 'lucide-react';
+import { getObservacaoRota, getCorObservacao } from '@/lib/observacoes-rotas';
 
 interface TripCardProps {
   trip: UnifiedTrip;
@@ -15,7 +16,7 @@ function safeDate(value: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Formata horário HH:mm com fallback “--:--” */
+/** Formata horário HH:mm com fallback "--:--" */
 function fmtTime(d: Date | null): string {
   return d ? format(d, 'HH:mm') : '--:--';
 }
@@ -35,6 +36,13 @@ export function TripCard({ trip, onSelect }: TripCardProps) {
     trip.provider === 'distribusion'
       ? 'bg-blue-100 text-blue-800'
       : 'bg-green-100 text-green-800';
+
+  // 🔥 NOVO: Buscar observação da rota
+  const observacao = getObservacaoRota(
+    trip.departureCity,
+    trip.arrivalCity,
+    trip.departureTime
+  );
 
   return (
     <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200">
@@ -65,6 +73,14 @@ export function TripCard({ trip, onSelect }: TripCardProps) {
           )}
         </div>
       </div>
+
+      {/* 🔥 NOVO: Badge de observação */}
+      {observacao && (
+        <div className={`mb-4 px-3 py-2 rounded-lg border flex items-center gap-2 ${getCorObservacao(observacao.tipo)}`}>
+          <Info className="w-4 h-4 flex-shrink-0" />
+          <span className="text-sm font-medium">{observacao.icone} {observacao.texto}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div>

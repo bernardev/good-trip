@@ -6,7 +6,7 @@ const PAGARME_SECRET_KEY = process.env.PAGARME_SECRET_KEY || '';
 const PAGARME_API_URL = 'https://api.pagar.me/core/v5';
 const isSimulationMode = !PAGARME_SECRET_KEY || PAGARME_SECRET_KEY.length < 10;
 
-const getAuthHeader = () => {
+const getAuthHeader = (): string => {
   const auth = Buffer.from(`${PAGARME_SECRET_KEY}:`).toString('base64');
   return `Basic ${auth}`;
 };
@@ -25,14 +25,20 @@ interface ReservaData {
     email?: string;
   }>;
   preco: number;
+  chargeId?: string; // 🔥 NOVO: necessário para estorno
   metadata?: Record<string, unknown>;
 }
 
 // 🔥 Salvar dados da reserva no Vercel KV
-async function salvarDadosReserva(orderId: string, data: ReservaData) {
+async function salvarDadosReserva(orderId: string, chargeId: string, data: ReservaData): Promise<void> {
   try {
-    await kv.set(`reserva:${orderId}`, JSON.stringify(data), { ex: 3600 });
-    console.log('💾 Dados salvos no KV:', orderId);
+    const dadosComChargeId: ReservaData = {
+      ...data,
+      chargeId // 🔥 IMPORTANTE: salvar chargeId para estorno
+    };
+    
+    await kv.set(`reserva:${orderId}`, JSON.stringify(dadosComChargeId), { ex: 3600 });
+    console.log('💾 Dados salvos no KV:', { orderId, chargeId });
   } catch (error) {
     console.error('❌ Erro ao salvar no KV:', error);
   }
@@ -102,14 +108,15 @@ export async function POST(request: NextRequest) {
         }
 
         const orderId = `sim_order_${Date.now()}`;
+        const chargeId = `sim_charge_${Date.now()}`;
         
-        // 🔥 SALVAR dados da reserva
-        await salvarDadosReserva(orderId, reservaData);
+        // 🔥 SALVAR dados da reserva COM chargeId
+        await salvarDadosReserva(orderId, chargeId, reservaData);
 
         return NextResponse.json({
           success: true,
           order_id: orderId,
-          charge_id: `sim_charge_${Date.now()}`,
+          charge_id: chargeId,
           status: 'paid',
           message: '✅ Pagamento simulado com sucesso!',
           simulation: true
@@ -118,14 +125,15 @@ export async function POST(request: NextRequest) {
 
       if (payment_method === 'pix') {
         const orderId = `sim_pix_order_${Date.now()}`;
+        const chargeId = `sim_pix_charge_${Date.now()}`;
         
-        // 🔥 SALVAR dados da reserva
-        await salvarDadosReserva(orderId, reservaData);
+        // 🔥 SALVAR dados da reserva COM chargeId
+        await salvarDadosReserva(orderId, chargeId, reservaData);
 
         return NextResponse.json({
           success: true,
           order_id: orderId,
-          charge_id: `sim_pix_charge_${Date.now()}`,
+          charge_id: chargeId,
           qr_code: 'SIMULADO_QR_CODE_' + Math.random().toString(36).substring(7).toUpperCase(),
           qr_code_url: 'https://exemplo.com/qr-code-simulado.png',
           expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
@@ -140,7 +148,7 @@ export async function POST(request: NextRequest) {
     const customerData = {
       name: customer.name,
       email: customer.email || 'naotemmail@goodtrip.com.br',
-      type: 'individual',
+      type: 'individual' as const,
       document: customer.document.replace(/\D/g, ''),
       document_type: customer.document_type || 'CPF',
       phones: {
@@ -216,10 +224,10 @@ export async function POST(request: NextRequest) {
       const charge = order.charges[0];
       const status = charge.status;
 
-      console.log('✅ Resposta da Pagar.me:', { order_id: order.id, status });
+      console.log('✅ Resposta da Pagar.me:', { order_id: order.id, charge_id: charge.id, status });
 
-      // 🔥 SALVAR dados da reserva
-      await salvarDadosReserva(order.id, reservaData);
+      // 🔥 SALVAR dados da reserva COM chargeId
+      await salvarDadosReserva(order.id, charge.id, reservaData);
 
       if (status === 'paid') {
         return NextResponse.json({
@@ -290,7 +298,7 @@ export async function POST(request: NextRequest) {
       const charge = order.charges[0];
       const lastTransaction = charge.last_transaction;
 
-      console.log('✅ PIX gerado:', order.id);
+      console.log('✅ PIX gerado:', { order_id: order.id, charge_id: charge.id });
 
       const qrCode = lastTransaction?.qr_code || 
                      lastTransaction?.pix?.qr_code || 
@@ -303,8 +311,8 @@ export async function POST(request: NextRequest) {
                         charge?.qr_code_url ||
                         '';
 
-      // 🔥 SALVAR dados da reserva
-      await salvarDadosReserva(order.id, reservaData);
+      // 🔥 SALVAR dados da reserva COM chargeId
+      await salvarDadosReserva(order.id, charge.id, reservaData);
 
       return NextResponse.json({
         success: true,

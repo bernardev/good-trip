@@ -1,7 +1,8 @@
 // apps/web/src/app/buscar-viop/pre-compra/page.tsx
 import Link from "next/link";
 import { headers } from "next/headers";
-import { ArrowLeft, MapPin, Clock, Calendar, Users, Sparkles, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Calendar, Users, Sparkles, ArrowRight, Check, Info } from "lucide-react";
+import { getObservacaoRota, getCorObservacao } from '@/lib/observacoes-rotas';
 
 type SearchParams = {
   servico?: string;
@@ -131,6 +132,13 @@ export default async function PreCompraPage({ searchParams }: Props) {
     servico, origem, destino, data, assentos: assentosSel.join(","),
   });
 
+  // 🔥 NOVO: Buscar observação da rota
+  const observacao = getObservacaoRota(
+    origemNome,
+    destinoNome,
+    meta?.saida || ''
+  );
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-sky-50 py-8 md:py-12">
       <div className="container mx-auto max-w-4xl px-4">
@@ -197,6 +205,17 @@ export default async function PreCompraPage({ searchParams }: Props) {
                 </div>
               )}
             </div>
+
+            {/* 🔥 NOVO: Badge de observação */}
+            {observacao && (
+              <div className={`px-4 py-3 rounded-xl border-2 flex items-center gap-3 ${getCorObservacao(observacao.tipo)}`}>
+                <Info className="w-5 h-5 flex-shrink-0" />
+                <div>
+                  <div className="font-bold text-sm">Atenção!</div>
+                  <div className="text-sm">{observacao.icone} {observacao.texto}</div>
+                </div>
+              </div>
+            )}
 
             {/* Grid de Horários */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

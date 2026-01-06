@@ -4,7 +4,8 @@
 import { Suspense } from 'react';
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { CreditCard, QrCode, Mail, Bus, Clock, Lock, Shield, CheckCircle2, AlertCircle } from 'lucide-react';
+import { CreditCard, QrCode, Mail, Bus, Clock, Lock, Shield, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { getObservacaoRota, getCorObservacao } from '@/lib/observacoes-rotas';
 
 type Query = {
   servico?: string; 
@@ -12,11 +13,7 @@ type Query = {
   destino?: string; 
   data?: string; 
   assentos?: string;
-  nome?: string; 
-  sobrenome?: string; 
-  docTipo?: 'CPF'|'RG'|'PASSAPORTE'; 
-  docNumero?: string; 
-  email?: string;
+  passageiros?: string;
   preco?: string;
 };
 
@@ -39,7 +36,7 @@ type ApiOnibusRes = {
 
 // 🔥 TAXAS DE JUROS (Opção B - Repassar ao cliente)
 const TAXAS_JUROS: Record<number, number> = {
-  1: 3.54,   // À vista também tem taxa!
+  1: 3.54,
   2: 6.46,
   3: 8.23,
   4: 10.00,
@@ -58,12 +55,13 @@ function PagamentoContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('credit_card');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix'); // 🔥 PIX como padrão
 
   const [origemNome, setOrigemNome] = useState<string>('');
   const [destinoNome, setDestinoNome] = useState<string>('');
   const [precoReal, setPrecoReal] = useState<number | null>(null);
   const [loadingViagem, setLoadingViagem] = useState(true);
+  const [saidaHorario, setSaidaHorario] = useState<string>('');
 
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
@@ -77,13 +75,24 @@ function PagamentoContent() {
     destino: sp.get('destino') ?? undefined,
     data: sp.get('data') ?? undefined,
     assentos: sp.get('assentos') ?? undefined,
-    nome: sp.get('nome') ?? undefined,
-    sobrenome: sp.get('sobrenome') ?? undefined,
-    docTipo: (sp.get('docTipo') as Query['docTipo']) ?? 'CPF',
-    docNumero: sp.get('docNumero') ?? undefined,
-    email: sp.get('email') ?? undefined,
+    passageiros: sp.get('passageiros') ?? undefined,
     preco: sp.get('preco') ?? undefined,
   }), [sp]);
+
+  // Parse passageiros
+  const passageiros = useMemo(() => {
+    try {
+      return q.passageiros ? JSON.parse(decodeURIComponent(q.passageiros)) : [];
+    } catch {
+      return [];
+    }
+  }, [q.passageiros]);
+
+  const primeiroPassageiro = passageiros[0] || {
+    nomeCompleto: 'Teste Usuário',
+    documento: '12345678909',
+    email: '[email protected]'
+  };
 
   useEffect(() => {
     async function fetchViagemData() {
@@ -106,6 +115,7 @@ function PagamentoContent() {
           
           setOrigemNome(json?.seats?.origem?.cidade || q.origem || '');
           setDestinoNome(json?.seats?.destino?.cidade || q.destino || '');
+          setSaidaHorario(json?.serviceMeta?.saida || '');
           
           const precoFromUrl = q.preco ? Number(q.preco) : null;
           const precoFromApi = json?.serviceMeta?.preco;
@@ -128,13 +138,18 @@ function PagamentoContent() {
     fetchViagemData();
   }, [q.servico, q.origem, q.destino, q.data, q.preco]);
 
+  const observacao = getObservacaoRota(
+  origemNome,
+  destinoNome,
+  saidaHorario
+  );
+
   const title = useMemo(() => {
     const o = origemNome || q.origem || 'Origem';
     const d = destinoNome || q.destino || 'Destino';
     return `Passagem ${o} → ${d}`;
   }, [origemNome, destinoNome, q.origem, q.destino]);
 
-  // Subtotal (preço base)
   const subtotal = useMemo<number>(() => {
     if (precoReal && precoReal > 0) {
       const numAssentos = q.assentos ? q.assentos.split(',').filter(Boolean).length : 1;
@@ -143,24 +158,20 @@ function PagamentoContent() {
     return 89.70;
   }, [precoReal, q.assentos]);
 
-  // Taxa de serviço (5%)
   const taxaServico = useMemo<number>(() => {
     return subtotal * 0.05;
   }, [subtotal]);
 
-  // Total SEM juros (subtotal + taxa serviço)
   const totalSemJuros = useMemo<number>(() => {
     return subtotal + taxaServico;
   }, [subtotal, taxaServico]);
 
-  // 🔥 Total COM juros (baseado nas parcelas selecionadas)
   const totalComJuros = useMemo<number>(() => {
     const numParcelas = parseInt(installments);
     const taxaJuros = TAXAS_JUROS[numParcelas] || 0;
     return totalSemJuros * (1 + taxaJuros / 100);
   }, [totalSemJuros, installments]);
 
-  // Valor dos juros aplicados
   const valorJuros = useMemo<number>(() => {
     return totalComJuros - totalSemJuros;
   }, [totalComJuros, totalSemJuros]);
@@ -214,7 +225,6 @@ function PagamentoContent() {
 
   const cardBrand = useMemo(() => getCardBrand(cardNumber), [cardNumber, getCardBrand]);
 
-  // 🔥 Opções de parcelamento COM juros
   const installmentOptions = useMemo(() => {
     const options = [];
     const maxInstallments = 12;
@@ -249,7 +259,6 @@ function PagamentoContent() {
           throw new Error('Número do cartão inválido');
         }
 
-        // 🔥 Enviar o total COM juros
         const response = await fetch('/api/payments/pagarme/process', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -260,23 +269,24 @@ function PagamentoContent() {
             card_expiry: cardExpiry,
             card_cvv: cardCvv,
             installments: parseInt(installments),
-            amount: Math.round(totalComJuros * 100), // 🔥 COM JUROS!
+            amount: Math.round(totalComJuros * 100),
             customer: {
-              name: `${q.nome ?? 'Teste'} ${q.sobrenome ?? 'Usuário'}`,
-              email: q.email ?? '[email protected]',
-              document: q.docNumero ?? '12345678909',
-              document_type: q.docTipo ?? 'CPF'
+              name: primeiroPassageiro.nomeCompleto,
+              email: primeiroPassageiro.email || '[email protected]',
+              document: primeiroPassageiro.documento || '12345678909',
+              document_type: 'CPF'
             },
             booking: {
               servico: q.servico,
               origem: q.origem,
               destino: q.destino,
               data: q.data,
-              assentos: q.assentos?.split(',').map(s => s.trim())
+              assentos: q.assentos?.split(',').map(s => s.trim()),
+              passageiros: passageiros
             },
             metadata: {
               title,
-              passenger_name: `${q.nome} ${q.sobrenome}`
+              passenger_name: primeiroPassageiro.nomeCompleto
             }
           })
         });
@@ -290,29 +300,29 @@ function PagamentoContent() {
         router.push(`/buscar-viop/confirmacao?order_id=${result.order_id}&status=paid`);
 
       } else if (paymentMethod === 'pix') {
-        // PIX não tem juros, usa total sem juros
         const response = await fetch('/api/payments/pagarme/process', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             payment_method: 'pix',
-            amount: Math.round(totalSemJuros * 100), // SEM JUROS
+            amount: Math.round(totalSemJuros * 100),
             customer: {
-              name: `${q.nome ?? 'Teste'} ${q.sobrenome ?? 'Usuário'}`,
-              email: q.email ?? '[email protected]',
-              document: q.docNumero ?? '12345678909',
-              document_type: q.docTipo ?? 'CPF'
+              name: primeiroPassageiro.nomeCompleto,
+              email: primeiroPassageiro.email || '[email protected]',
+              document: primeiroPassageiro.documento || '12345678909',
+              document_type: 'CPF'
             },
             booking: {
               servico: q.servico,
               origem: q.origem,
               destino: q.destino,
               data: q.data,
-              assentos: q.assentos?.split(',').map(s => s.trim())
+              assentos: q.assentos?.split(',').map(s => s.trim()),
+              passageiros: passageiros
             },
             metadata: {
               title,
-              passenger_name: `${q.nome} ${q.sobrenome}`
+              passenger_name: primeiroPassageiro.nomeCompleto
             }
           })
         });
@@ -334,7 +344,7 @@ function PagamentoContent() {
     }
   }, [
     paymentMethod, cardNumber, cardName, cardExpiry, cardCvv, 
-    installments, totalComJuros, totalSemJuros, q, title, router
+    installments, totalComJuros, totalSemJuros, q, title, router, passageiros, primeiroPassageiro
   ]);
 
   if (loadingViagem) {
@@ -368,27 +378,8 @@ function PagamentoContent() {
                 Escolha como pagar
               </h2>
               
+              {/* 🔥 ORDEM ALTERADA: PIX primeiro */}
               <div className="grid grid-cols-2 gap-4 mb-6">
-                <button
-                  onClick={() => setPaymentMethod('credit_card')}
-                  className={`relative rounded-xl border-2 p-4 transition-all duration-300 ${
-                    paymentMethod === 'credit_card'
-                      ? 'border-blue-600 bg-blue-50 shadow-md scale-105'
-                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <CreditCard className={`w-8 h-8 ${paymentMethod === 'credit_card' ? 'text-blue-600' : 'text-slate-400'}`} />
-                    <span className="font-semibold text-sm">Cartão de Crédito</span>
-                    <span className="text-xs text-slate-500">Em até 12x</span>
-                  </div>
-                  {paymentMethod === 'credit_card' && (
-                    <div className="absolute -top-2 -right-2 bg-blue-600 rounded-full p-1">
-                      <CheckCircle2 className="w-4 h-4 text-white" />
-                    </div>
-                  )}
-                </button>
-
                 <button
                   onClick={() => setPaymentMethod('pix')}
                   className={`relative rounded-xl border-2 p-4 transition-all duration-300 ${
@@ -408,7 +399,59 @@ function PagamentoContent() {
                     </div>
                   )}
                 </button>
+
+                <button
+                  onClick={() => setPaymentMethod('credit_card')}
+                  className={`relative rounded-xl border-2 p-4 transition-all duration-300 ${
+                    paymentMethod === 'credit_card'
+                      ? 'border-blue-600 bg-blue-50 shadow-md scale-105'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <CreditCard className={`w-8 h-8 ${paymentMethod === 'credit_card' ? 'text-blue-600' : 'text-slate-400'}`} />
+                    <span className="font-semibold text-sm">Cartão de Crédito</span>
+                    <span className="text-xs text-slate-500">Em até 12x</span>
+                  </div>
+                  {paymentMethod === 'credit_card' && (
+                    <div className="absolute -top-2 -right-2 bg-blue-600 rounded-full p-1">
+                      <CheckCircle2 className="w-4 h-4 text-white" />
+                    </div>
+                  )}
+                </button>
               </div>
+
+              {paymentMethod === 'pix' && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-full bg-green-500 p-3">
+                        <QrCode className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-green-900 mb-2">Pagamento via PIX</h3>
+                        <ul className="text-sm text-green-800 space-y-1">
+                          <li className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Aprovação instantânea
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Sem taxas adicionais
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4" />
+                            QR Code válido por 30 minutos
+                          </li>
+                        </ul>
+                        <p className="mt-4 text-sm text-green-700">
+                          Ao clicar em Finalizar, você receberá um QR Code para escanear no app do seu banco.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {paymentMethod === 'credit_card' && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -510,38 +553,6 @@ function PagamentoContent() {
                   </div>
                 </div>
               )}
-
-              {paymentMethod === 'pix' && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 p-6">
-                    <div className="flex items-start gap-4">
-                      <div className="rounded-full bg-green-500 p-3">
-                        <QrCode className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-green-900 mb-2">Pagamento via PIX</h3>
-                        <ul className="text-sm text-green-800 space-y-1">
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4" />
-                            Aprovação instantânea
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4" />
-                            Sem taxas adicionais
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4" />
-                            QR Code válido por 30 minutos
-                          </li>
-                        </ul>
-                        <p className="mt-4 text-sm text-green-700">
-                          Ao clicar em Finalizar, você receberá um QR Code para escanear no app do seu banco.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             {err && (
@@ -607,19 +618,32 @@ function PagamentoContent() {
                 </div>
               </div>
 
+              {observacao && (
+                <div className={`rounded-xl border-2 p-3 mb-4 flex items-start gap-2 ${getCorObservacao(observacao.tipo)}`}>
+                  <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs leading-tight">
+                    <div className="font-bold">Atenção!</div>
+                    <div>{observacao.icone} {observacao.texto}</div>
+                  </div>
+                </div>
+              )}
+
               <div className="rounded-xl border border-slate-200 p-4 mb-4">
-                <h4 className="font-semibold mb-2 text-sm text-slate-700">Passageiro</h4>
+                <h4 className="font-semibold mb-2 text-sm text-slate-700">Passageiro{passageiros.length > 1 ? 's' : ''}</h4>
                 <div className="space-y-1 text-sm text-slate-600">
-                  <p className="font-medium">{q.nome ?? 'Teste'} {q.sobrenome ?? 'Usuário'}</p>
-                  <p className="flex items-center gap-2 text-xs">
-                    <Mail className="w-3 h-3" /> 
-                    {q.email ?? '[email protected]'}
-                  </p>
-                  <p className="text-xs">{q.docTipo ?? 'CPF'}: {q.docNumero ?? '12345678909'}</p>
+                  <p className="font-medium">{primeiroPassageiro.nomeCompleto}</p>
+                  {primeiroPassageiro.email && (
+                    <p className="flex items-center gap-2 text-xs">
+                      <Mail className="w-3 h-3" /> 
+                      {primeiroPassageiro.email}
+                    </p>
+                  )}
+                  {passageiros.length > 1 && (
+                    <p className="text-xs text-slate-500">+ {passageiros.length - 1} passageiro(s)</p>
+                  )}
                 </div>
               </div>
 
-              {/* 🔥 RESUMO COM JUROS */}
               <div className="border-t border-slate-200 pt-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-slate-600">Subtotal</span>
@@ -630,7 +654,6 @@ function PagamentoContent() {
                   <span className="font-medium text-blue-600">R$ {taxaServico.toFixed(2)}</span>
                 </div>
                 
-                {/* Mostrar juros só no cartão */}
                 {paymentMethod === 'credit_card' && valorJuros > 0 && (
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-slate-600">Juros ({TAXAS_JUROS[parseInt(installments)]}%)</span>

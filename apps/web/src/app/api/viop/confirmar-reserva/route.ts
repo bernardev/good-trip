@@ -1,6 +1,7 @@
 // apps/web/src/app/api/viop/confirmar-reserva/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { kv } from '@vercel/kv';
+import { estornarAutomatico } from '@/lib/estorno';
 
 const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
@@ -20,6 +21,7 @@ type ReservaData = {
     email?: string;
   }>;
   preco: number;
+  chargeId?: string;
 };
 
 type BloqueioResponse = {
@@ -95,9 +97,13 @@ type ConfirmacaoResponse = {
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const bilhetesEmitidos: ConfirmacaoResponse[] = [];
+  let orderId = '';
+  
   try {
     const body = await req.json();
-    const { orderId, status } = body;
+    const { orderId: orderIdFromBody, status } = body;
+    orderId = orderIdFromBody;
 
     console.log('📝 Iniciando emissão de bilhete:', { orderId, status });
 
@@ -117,42 +123,96 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 🔥 Processar múltiplos assentos
+    // 🔥 Processar múltiplos assentos com tratamento de erro
     console.log(`🎫 Processando ${reservaData.assentos.length} assento(s)...`);
     
-    const bilhetesEmitidos: ConfirmacaoResponse[] = [];
     let primeiroBloqueioDados: BloqueioResponse | null = null;
 
     for (let i = 0; i < reservaData.assentos.length; i++) {
       const assento = reservaData.assentos[i];
       console.log(`\n🔒 [${i + 1}/${reservaData.assentos.length}] Bloqueando assento ${assento}...`);
 
-      const bloqueio = await bloquearPoltronaIndividual(reservaData, assento);
+      try {
+        const bloqueio = await bloquearPoltronaIndividual(reservaData, assento);
 
-      if (!bloqueio.transacao) {
-        throw new Error(`Bloqueio não retornou transacao para assento ${assento}`);
+        if (!bloqueio.transacao) {
+          throw new Error(`Bloqueio não retornou transacao para assento ${assento}`);
+        }
+
+        if (i === 0) {
+          primeiroBloqueioDados = bloqueio;
+        }
+
+        console.log(`✅ Assento ${assento} bloqueado! Transacao: ${bloqueio.transacao}`);
+
+        // 🔥 Usar dados do passageiro correto para este assento
+        const passageiroAssento = reservaData.passageiros.find(p => p.assento === assento) || reservaData.passageiros[i];
+
+        console.log(`💳 Confirmando venda do assento ${assento}...`);
+        const confirmacao = await confirmarVenda(reservaData, bloqueio, passageiroAssento);
+
+        if (!confirmacao.localizador) {
+          throw new Error(`Venda não retornou localizador para assento ${assento}`);
+        }
+
+        console.log(`🎉 Bilhete emitido! Localizador: ${confirmacao.localizador}`);
+        bilhetesEmitidos.push(confirmacao);
+
+      } catch (erroAssento) {
+        const mensagemErro = erroAssento instanceof Error ? erroAssento.message : 'Erro desconhecido';
+        console.error(`❌ Erro ao processar assento ${assento}:`, mensagemErro);
+        
+        // 🔥 ESTORNO AUTOMÁTICO
+        console.log(`\n💸 Iniciando estorno automático...`);
+        console.log(`📊 Situação: ${bilhetesEmitidos.length} de ${reservaData.assentos.length} bilhetes emitidos`);
+        
+        const resultadoEstorno = await estornarAutomatico(
+          orderId,
+          bilhetesEmitidos.length,
+          `Falha na emissão do assento ${assento}: ${mensagemErro}`
+        );
+
+        if (resultadoEstorno.estornado) {
+          console.log(`✅ Estorno processado: R$ ${resultadoEstorno.valorEstornado?.toFixed(2)}`);
+          
+          return NextResponse.json({
+            error: `Erro ao emitir bilhetes. Estorno automático processado.`,
+            status: 'NEGADO',
+            estornoProcessado: true,
+            valorEstornado: resultadoEstorno.valorEstornado,
+            bilhetesEmitidos: bilhetesEmitidos.length,
+            bilhetesEsperados: reservaData.assentos.length,
+            detalhes: mensagemErro
+          }, { status: 500 });
+        } else if (resultadoEstorno.requerAprovacao) {
+          console.log(`⚠️ Estorno requer aprovação manual (R$ ${resultadoEstorno.valorEstornado?.toFixed(2)})`);
+          
+          return NextResponse.json({
+            error: `Erro ao emitir bilhetes. Estorno requer aprovação manual.`,
+            status: 'NEGADO',
+            estornoRequerAprovacao: true,
+            valorEstorno: resultadoEstorno.valorEstornado,
+            bilhetesEmitidos: bilhetesEmitidos.length,
+            bilhetesEsperados: reservaData.assentos.length,
+            detalhes: mensagemErro
+          }, { status: 500 });
+        } else {
+          console.error(`❌ Falha ao processar estorno:`, resultadoEstorno.error);
+          
+          return NextResponse.json({
+            error: `Erro ao emitir bilhetes e processar estorno.`,
+            status: 'NEGADO',
+            estornoFalhou: true,
+            bilhetesEmitidos: bilhetesEmitidos.length,
+            bilhetesEsperados: reservaData.assentos.length,
+            detalhes: mensagemErro,
+            erroEstorno: resultadoEstorno.error
+          }, { status: 500 });
+        }
       }
-
-      if (i === 0) {
-        primeiroBloqueioDados = bloqueio;
-      }
-
-      console.log(`✅ Assento ${assento} bloqueado! Transacao: ${bloqueio.transacao}`);
-
-      // 🔥 Usar dados do passageiro correto para este assento
-      const passageiroAssento = reservaData.passageiros.find(p => p.assento === assento) || reservaData.passageiros[i];
-
-      console.log(`💳 Confirmando venda do assento ${assento}...`);
-      const confirmacao = await confirmarVenda(reservaData, bloqueio, passageiroAssento);
-
-      if (!confirmacao.localizador) {
-        throw new Error(`Venda não retornou localizador para assento ${assento}`);
-      }
-
-      console.log(`🎉 Bilhete emitido! Localizador: ${confirmacao.localizador}`);
-      bilhetesEmitidos.push(confirmacao);
     }
 
+    // ✅ Todos os bilhetes foram emitidos com sucesso
     console.log(`\n✅ Todos os ${bilhetesEmitidos.length} bilhetes foram emitidos com sucesso!`);
 
     const primeiroBilhete = bilhetesEmitidos[0];
@@ -206,10 +266,33 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Erro ao confirmar reserva:', error);
+    const mensagemErro = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error('❌ Erro fatal ao confirmar reserva:', mensagemErro);
+    
+    // 🔥 ESTORNO AUTOMÁTICO em caso de erro fatal
+    if (orderId && bilhetesEmitidos.length > 0) {
+      console.log(`\n💸 Erro fatal - Iniciando estorno automático...`);
+      
+      const resultadoEstorno = await estornarAutomatico(
+        orderId,
+        bilhetesEmitidos.length,
+        `Erro fatal no processamento: ${mensagemErro}`
+      );
+
+      if (resultadoEstorno.estornado || resultadoEstorno.requerAprovacao) {
+        return NextResponse.json({
+          error: mensagemErro,
+          status: 'NEGADO',
+          estornoProcessado: resultadoEstorno.estornado,
+          estornoRequerAprovacao: resultadoEstorno.requerAprovacao,
+          valorEstornado: resultadoEstorno.valorEstornado
+        }, { status: 500 });
+      }
+    }
+    
     return NextResponse.json(
       { 
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
+        error: mensagemErro,
         status: 'NEGADO',
       },
       { status: 500 }
@@ -254,7 +337,6 @@ async function bloquearPoltronaIndividual(reserva: ReservaData, assento: string)
   return response;
 }
 
-// 🔥 Confirmar venda com dados do passageiro correto
 async function confirmarVenda(
   reserva: ReservaData, 
   bloqueioResponse: BloqueioResponse,

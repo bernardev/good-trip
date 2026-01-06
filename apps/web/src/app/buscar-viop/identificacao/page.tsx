@@ -68,7 +68,7 @@ export default async function IdentificacaoPage({ searchParams }: PageProps) {
     );
   }
 
-  // 🔥 Buscar dados da API para pegar nomes das cidades e preço correto
+  // 🔥 Buscar dados da API para pegar nomes das cidades, preço e horários corretos
   const h = await headers();
   const proto = h.get("x-forwarded-proto") ?? "http";
   const host = h.get("host") ?? "localhost:3000";
@@ -81,6 +81,10 @@ export default async function IdentificacaoPage({ searchParams }: PageProps) {
   let origemNome = origem;
   let destinoNome = destino;
   let precoReal: number | undefined = sp.preco ? Number(sp.preco) : undefined;
+  let empresaReal: string | undefined = sp.empresa;
+  let classeReal: string | undefined = sp.classe;
+  let saidaReal: string | undefined = sp.saida;
+  let chegadaReal: string | undefined = sp.chegada;
 
   try {
     const res = await fetch(url, { cache: "no-store" });
@@ -89,6 +93,10 @@ export default async function IdentificacaoPage({ searchParams }: PageProps) {
       origemNome = json?.seats?.origem?.cidade || origem;
       destinoNome = json?.seats?.destino?.cidade || destino;
       precoReal = json?.serviceMeta?.preco ?? precoReal;
+      empresaReal = json?.serviceMeta?.empresa ?? empresaReal;
+      classeReal = json?.serviceMeta?.classe ?? classeReal;
+      saidaReal = json?.serviceMeta?.saida ?? saidaReal;
+      chegadaReal = json?.serviceMeta?.chegada ?? chegadaReal;
     }
   } catch (err) {
     console.error("Erro ao buscar dados da viagem:", err);
@@ -104,17 +112,17 @@ export default async function IdentificacaoPage({ searchParams }: PageProps) {
     destinoNome?: string;
   } = {
     preco: precoReal,
-    empresa: sp.empresa,
-    classe: sp.classe,
-    saida: sp.saida,
-    chegada: sp.chegada,
+    empresa: empresaReal,
+    classe: classeReal,
+    saida: saidaReal,
+    chegada: chegadaReal,
     origemNome,
     destinoNome,
   };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-sky-50 py-8 md:py-12">
-      <div className="container mx-auto max-w-4xl px-4">
+      <div className="container mx-auto max-w-6xl px-4">
         
         {/* Header */}
         <div className="mb-8">

@@ -4,7 +4,7 @@
 import { Suspense } from 'react';
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { CreditCard, QrCode, Mail, Bus, Clock, Lock, Shield, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { CreditCard, QrCode, Mail, Bus, Clock, Lock, Shield, CheckCircle2, AlertCircle, Info, Phone, User } from 'lucide-react';
 import { getObservacaoRota, getCorObservacao } from '@/lib/observacoes-rotas';
 
 type Query = {
@@ -34,7 +34,18 @@ type ApiOnibusRes = {
   };
 };
 
-// 🔥 TAXAS DE JUROS (Opção B - Repassar ao cliente)
+// 🔥 Tipo para passageiro
+type Passageiro = {
+  assento: string;
+  nomeCompleto: string;
+  docTipo: string;
+  docNumero: string;
+  nacionalidade: string;
+  telefone: string;
+  email: string;
+};
+
+// 🔥 TAXAS DE JUROS
 const TAXAS_JUROS: Record<number, number> = {
   1: 3.54,
   2: 6.46,
@@ -55,13 +66,13 @@ function PagamentoContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix'); // 🔥 PIX como padrão
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
 
   const [origemNome, setOrigemNome] = useState<string>('');
   const [destinoNome, setDestinoNome] = useState<string>('');
   const [precoReal, setPrecoReal] = useState<number | null>(null);
-  const [loadingViagem, setLoadingViagem] = useState(true);
   const [saidaHorario, setSaidaHorario] = useState<string>('');
+  const [loadingViagem, setLoadingViagem] = useState(true);
 
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
@@ -79,20 +90,36 @@ function PagamentoContent() {
     preco: sp.get('preco') ?? undefined,
   }), [sp]);
 
-  // Parse passageiros
-  const passageiros = useMemo(() => {
+  // 🔥 Parse passageiros - TIPADO
+  const passageiros = useMemo<Passageiro[]>(() => {
     try {
-      return q.passageiros ? JSON.parse(decodeURIComponent(q.passageiros)) : [];
+      const parsed = q.passageiros ? JSON.parse(decodeURIComponent(q.passageiros)) : [];
+      // Validar estrutura
+      if (Array.isArray(parsed)) {
+        return parsed.filter((p): p is Passageiro => 
+          typeof p === 'object' && 
+          p !== null &&
+          'assento' in p &&
+          'nomeCompleto' in p
+        );
+      }
+      return [];
     } catch {
       return [];
     }
   }, [q.passageiros]);
 
-  const primeiroPassageiro = passageiros[0] || {
-    nomeCompleto: 'Teste Usuário',
-    documento: '12345678909',
-    email: '[email protected]'
-  };
+  const primeiroPassageiro: Passageiro = useMemo(() => {
+    return passageiros[0] || {
+      assento: '',
+      nomeCompleto: 'Teste Usuário',
+      docTipo: 'CPF',
+      docNumero: '12345678909',
+      nacionalidade: 'Brasil',
+      email: '[email protected]',
+      telefone: ''
+    };
+  }, [passageiros]);
 
   useEffect(() => {
     async function fetchViagemData() {
@@ -138,12 +165,6 @@ function PagamentoContent() {
     fetchViagemData();
   }, [q.servico, q.origem, q.destino, q.data, q.preco]);
 
-  const observacao = getObservacaoRota(
-  origemNome,
-  destinoNome,
-  saidaHorario
-  );
-
   const title = useMemo(() => {
     const o = origemNome || q.origem || 'Origem';
     const d = destinoNome || q.destino || 'Destino';
@@ -187,6 +208,13 @@ function PagamentoContent() {
       year: 'numeric' 
     });
   }, [q.data]);
+
+  // 🔥 Buscar observação da rota
+  const observacao = getObservacaoRota(
+    origemNome,
+    destinoNome,
+    saidaHorario
+  );
 
   const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\s/g, '');
@@ -272,8 +300,8 @@ function PagamentoContent() {
             amount: Math.round(totalComJuros * 100),
             customer: {
               name: primeiroPassageiro.nomeCompleto,
-              email: primeiroPassageiro.email || '[email protected]',
-              document: primeiroPassageiro.documento || '12345678909',
+              email: primeiroPassageiro.email?.trim() || '[email protected]',
+              document: primeiroPassageiro.docNumero || '12345678909',
               document_type: 'CPF'
             },
             booking: {
@@ -308,8 +336,8 @@ function PagamentoContent() {
             amount: Math.round(totalSemJuros * 100),
             customer: {
               name: primeiroPassageiro.nomeCompleto,
-              email: primeiroPassageiro.email || '[email protected]',
-              document: primeiroPassageiro.documento || '12345678909',
+              email: primeiroPassageiro.email?.trim() || '[email protected]',
+              document: primeiroPassageiro.docNumero || '12345678909',
               document_type: 'CPF'
             },
             booking: {
@@ -378,7 +406,6 @@ function PagamentoContent() {
                 Escolha como pagar
               </h2>
               
-              {/* 🔥 ORDEM ALTERADA: PIX primeiro */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <button
                   onClick={() => setPaymentMethod('pix')}
@@ -618,6 +645,7 @@ function PagamentoContent() {
                 </div>
               </div>
 
+              {/* 🔥 Observação da rota */}
               {observacao && (
                 <div className={`rounded-xl border-2 p-3 mb-4 flex items-start gap-2 ${getCorObservacao(observacao.tipo)}`}>
                   <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -628,19 +656,38 @@ function PagamentoContent() {
                 </div>
               )}
 
+              {/* 🔥 Card com TODOS os dados dos passageiros - TIPADO */}
               <div className="rounded-xl border border-slate-200 p-4 mb-4">
-                <h4 className="font-semibold mb-2 text-sm text-slate-700">Passageiro{passageiros.length > 1 ? 's' : ''}</h4>
-                <div className="space-y-1 text-sm text-slate-600">
-                  <p className="font-medium">{primeiroPassageiro.nomeCompleto}</p>
-                  {primeiroPassageiro.email && (
-                    <p className="flex items-center gap-2 text-xs">
-                      <Mail className="w-3 h-3" /> 
-                      {primeiroPassageiro.email}
-                    </p>
-                  )}
-                  {passageiros.length > 1 && (
-                    <p className="text-xs text-slate-500">+ {passageiros.length - 1} passageiro(s)</p>
-                  )}
+                <h4 className="font-semibold mb-3 text-sm text-slate-700 flex items-center gap-2">
+                  <User className="w-4 h-4 text-blue-600" />
+                  Passageiro{passageiros.length > 1 ? 's' : ''}
+                </h4>
+                <div className="space-y-3">
+                  {passageiros.map((pass: Passageiro, idx: number) => (
+                    <div key={idx} className={`${idx > 0 ? 'pt-3 border-t border-slate-100' : ''}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded">
+                          Assento {pass.assento}
+                        </span>
+                      </div>
+                      <p className="font-medium text-slate-900 text-sm">{pass.nomeCompleto}</p>
+                      <div className="text-xs text-slate-600 space-y-0.5 mt-1">
+                        <p>{pass.docTipo}: {pass.docNumero}</p>
+                        {pass.email && (
+                          <p className="flex items-center gap-1">
+                            <Mail className="w-3 h-3" /> 
+                            {pass.email}
+                          </p>
+                        )}
+                        {pass.telefone && (
+                          <p className="flex items-center gap-1">
+                            <Phone className="w-3 h-3" /> 
+                            {pass.telefone}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 

@@ -98,7 +98,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
       docNumero: "",
       nacionalidade: "Brasil",
       telefone: "",
-      email: "",
+      email: "", // 🔥 Agora é obrigatório
     }))
   );
 
@@ -130,6 +130,11 @@ export default function IdentificacaoClient({ query, meta }: Props) {
         return `Passageiro ${i+1} (Assento ${p.assento}): Informe o documento.`;
       if (!p.telefone.trim()) 
         return `Passageiro ${i+1} (Assento ${p.assento}): Informe o telefone.`;
+      if (!p.email.trim()) 
+        return `Passageiro ${i+1} (Assento ${p.assento}): Informe o e-mail.`;
+      // Validação básica de email
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim())) 
+        return `Passageiro ${i+1} (Assento ${p.assento}): E-mail inválido.`;
     }
     if (!terms) return "Aceite os Termos e Condições para continuar.";
     return null;
@@ -259,11 +264,12 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                   />
                   <Field
                     type="email"
-                    label="E-mail (opcional)"
+                    label="E-mail*"
                     icon={<Mail className="w-4 h-4" />}
                     value={passageiro.email}
                     onChange={(v) => setPassageiro(index, "email", v)}
-                    required={false}
+                    placeholder="[email protected]"
+                    required={true}
                   />
                 </div>
               </div>

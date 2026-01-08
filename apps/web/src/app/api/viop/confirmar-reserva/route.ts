@@ -7,19 +7,23 @@ const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
 const AUTH = "Basic R09PRFRSSVBBUEk6QGcxdDIj";
 
+type Passageiro = {
+  assento: string;
+  nomeCompleto: string;
+  docNumero: string;
+  docTipo: string;
+  nacionalidade: string;
+  telefone: string;
+  email?: string;
+};
+
 type ReservaData = {
   servico: string;
   origem: string;
   destino: string;
   data: string;
   assentos: string[];
-  passageiros: Array<{
-    assento: string;
-    nomeCompleto: string;
-    documento: string;
-    telefone: string;
-    email?: string;
-  }>;
+  passageiros: Passageiro[];
   preco: number;
   chargeId?: string;
 };
@@ -31,8 +35,8 @@ type BloqueioResponse = {
   duracao: number;
   dataSaida?: string;
   dataChegada?: string;
-  origem?: { cidade: string };
-  destino?: { cidade: string };
+  origem?: { cidade: string; id: number };
+  destino?: { cidade: string; id: number };
   linha?: string;
   classeServicoId?: number;
 };
@@ -59,6 +63,29 @@ type CabecalhoEmitente = {
   cep?: string;
 };
 
+type BPEData = {
+  chaveBpe?: string;
+  codigoMonitriipBPe?: string;
+  qrcodeBpe?: string;
+  tarifa?: string;
+  pedagio?: string;
+  taxaEmbarque?: string;
+  seguro?: string;
+  outros?: string;
+  numeroBpe?: string;
+  serie?: string;
+  protocoloAutorizacao?: string;
+  dataAutorizacao?: string;
+  prefixo?: string;
+  plataforma?: string;
+  linha?: string;
+  classe?: string;
+  cabecalhoAgencia?: CabecalhoAgencia;
+  cabecalhoEmitente?: CabecalhoEmitente;
+  dataHoraEmbarqueInicio?: string;
+  dataHoraEmbarqueFim?: string;
+};
+
 type ConfirmacaoResponse = {
   localizador: string;
   numeroBilhete: string;
@@ -69,29 +96,13 @@ type ConfirmacaoResponse = {
   descDestino?: string;
   nome: string;
   documento: string;
-  bpe?: {
-    chaveBpe?: string;
-    codigoMonitriipBPe?: string;
-    qrcodeBpe?: string;
-    tarifa?: string;
-    pedagio?: string;
-    taxaEmbarque?: string;
-    seguro?: string;
-    outros?: string;
-    numeroBpe?: string;
-    serie?: string;
-    protocoloAutorizacao?: string;
-    dataAutorizacao?: string;
-    prefixo?: string;
-    plataforma?: string;
-    linha?: string;
-    classe?: string;
-    cabecalhoAgencia?: CabecalhoAgencia;
-    cabecalhoEmitente?: CabecalhoEmitente;
-    dataHoraEmbarqueInicio?: string;
-    dataHoraEmbarqueFim?: string;
-  };
+  bpe?: BPEData;
   cupomTaxaEmbarque?: string;
+};
+
+type RequestBody = {
+  orderId: string;
+  status: string;
 };
 
 export const dynamic = "force-dynamic";
@@ -101,7 +112,7 @@ export async function POST(req: NextRequest) {
   let orderId = '';
   
   try {
-    const body = await req.json();
+    const body: RequestBody = await req.json();
     const { orderId: orderIdFromBody, status } = body;
     orderId = orderIdFromBody;
 
@@ -218,6 +229,9 @@ export async function POST(req: NextRequest) {
     const primeiroBilhete = bilhetesEmitidos[0];
     const bloqueioRef = primeiroBloqueioDados!;
 
+    // 🔥 Calcular valor total correto (preco já é total)
+    const valorTotal = reservaData.preco;
+
     return NextResponse.json({
       localizador: primeiroBilhete.localizador,
       status: 'CONFIRMADO',
@@ -225,7 +239,7 @@ export async function POST(req: NextRequest) {
       numeroSistema: primeiroBilhete.numeroSistema,
       poltrona: primeiroBilhete.poltrona,
       servico: primeiroBilhete.servico,
-      total: reservaData.preco * reservaData.assentos.length,
+      total: valorTotal,
       origemNome: primeiroBilhete.descOrigem || bloqueioRef.origem?.cidade,
       destinoNome: primeiroBilhete.descDestino || bloqueioRef.destino?.cidade,
       data: reservaData.data,
@@ -331,23 +345,23 @@ async function bloquearPoltronaIndividual(reserva: ReservaData, assento: string)
     throw new Error(`Erro ao bloquear poltrona ${assento}: ${res.status}`);
   }
 
-  const response = await res.json();
+  const response: unknown = await res.json();
   console.log('✅ Resposta bloquearPoltrona:', response);
   
-  return response;
+  return response as BloqueioResponse;
 }
 
 async function confirmarVenda(
   reserva: ReservaData, 
   bloqueioResponse: BloqueioResponse,
-  passageiro: ReservaData['passageiros'][0]
+  passageiro: Passageiro
 ): Promise<ConfirmacaoResponse> {
   const url = `${VIOP_BASE}/confirmavenda/confirmarVenda`;
   
   const payload = {
     transacao: bloqueioResponse.transacao,
     nomePassageiro: passageiro.nomeCompleto,
-    documentoPassageiro: passageiro.documento,
+    documentoPassageiro: passageiro.docNumero, // 🔥 CORRIGIDO: era .documento
     tipoDocumentoPassageiro: "CPF",
     email: passageiro.email || 'naotemmail@goodtrip.com.br',
     telefone: passageiro.telefone.replace(/\D/g, ''),
@@ -382,7 +396,7 @@ async function confirmarVenda(
     throw new Error(`Erro ao confirmar venda: ${res.status}`);
   }
 
-  const response = await res.json();
+  const response: unknown = await res.json();
   
   console.log('=== RESPONSE COMPLETA ===');
   console.log(JSON.stringify(response, null, 2));
@@ -390,7 +404,7 @@ async function confirmarVenda(
   
   console.log('✅ Venda confirmada');
   
-  return response;
+  return response as ConfirmacaoResponse;
 }
 
 async function buscarDadosReserva(orderId: string): Promise<ReservaData | null> {

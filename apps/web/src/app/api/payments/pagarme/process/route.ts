@@ -1,4 +1,4 @@
-// app/api/payments/pagarme/process/route.ts
+// apps/web/src/app/api/payments/pagarme/process/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 
@@ -11,23 +11,104 @@ const getAuthHeader = (): string => {
   return `Basic ${auth}`;
 };
 
-interface ReservaData {
+type Passageiro = {
+  assento: string;
+  nomeCompleto: string;
+  docNumero: string;
+  docTipo: string;
+  nacionalidade: string;
+  telefone: string;
+  email?: string;
+};
+
+type ReservaData = {
   servico?: string;
   origem?: string;
   destino?: string;
   data?: string;
   assentos: string[];
-  passageiros: Array<{
-    assento: string;
-    nomeCompleto: string;
-    documento?: string;
-    telefone: string;
-    email?: string;
-  }>;
-  preco: number;
-  chargeId?: string; // 🔥 NOVO: necessário para estorno
+  passageiros: Passageiro[];
+  preco: number; // 🔥 IMPORTANTE: Este é o valor TOTAL de todos os assentos
+  chargeId?: string;
   metadata?: Record<string, unknown>;
-}
+};
+
+type CustomerData = {
+  name: string;
+  email: string;
+  type: 'individual';
+  document: string;
+  document_type: string;
+  phones: {
+    mobile_phone: {
+      country_code: string;
+      area_code: string;
+      number: string;
+    };
+  };
+};
+
+type OrderItem = {
+  code: string;
+  description: string;
+  amount: number;
+  quantity: number;
+};
+
+type PagarmeCharge = {
+  id: string;
+  status: string;
+  last_transaction?: {
+    gateway_response?: {
+      message?: string;
+    };
+    qr_code?: string;
+    qr_code_url?: string;
+    qr_code_data?: string;
+    expires_at?: string;
+    type?: string;
+    pix?: {
+      qr_code?: string;
+      qr_code_url?: string;
+    };
+  };
+  qr_code?: string;
+  qr_code_url?: string;
+};
+
+type PagarmeOrder = {
+  id: string;
+  charges: PagarmeCharge[];
+};
+
+type RequestBody = {
+  payment_method: 'credit_card' | 'pix';
+  amount: number;
+  customer: {
+    name: string;
+    email?: string;
+    document: string;
+    document_type?: string;
+    phone?: {
+      area_code?: string;
+      number?: string;
+    };
+  };
+  booking?: {
+    servico?: string;
+    origem?: string;
+    destino?: string;
+    data?: string;
+    assentos?: string[];
+    passageiros?: Passageiro[];
+  };
+  metadata?: Record<string, unknown>;
+  card_number?: string;
+  card_name?: string;
+  card_expiry?: string;
+  card_cvv?: string;
+  installments?: number;
+};
 
 // 🔥 Salvar dados da reserva no Vercel KV
 async function salvarDadosReserva(orderId: string, chargeId: string, data: ReservaData): Promise<void> {
@@ -46,7 +127,7 @@ async function salvarDadosReserva(orderId: string, chargeId: string, data: Reser
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body: RequestBody = await request.json();
     const { 
       payment_method, 
       amount, 
@@ -68,6 +149,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 🔥 Preparar dados da reserva com múltiplos passageiros
+    // IMPORTANTE: amount vem em centavos, preco deve ser em reais
     const reservaData: ReservaData = {
       servico: booking?.servico,
       origem: booking?.origem,
@@ -75,14 +157,15 @@ export async function POST(request: NextRequest) {
       data: booking?.data,
       assentos: booking?.assentos || [],
       passageiros: booking?.passageiros || [],
-      preco: amount / 100,
+      preco: amount / 100, // 🔥 CONVERTER CENTAVOS → REAIS - Este é o valor TOTAL
       metadata,
     };
 
     console.log('📦 Dados da reserva preparados:', {
       servico: reservaData.servico,
       assentos: reservaData.assentos,
-      passageiros: reservaData.passageiros.length
+      passageiros: reservaData.passageiros.length,
+      precoTotal: reservaData.preco
     });
 
     // ========== MODO SIMULAÇÃO ==========
@@ -145,10 +228,10 @@ export async function POST(request: NextRequest) {
 
     // ========== MODO REAL ==========
 
-    const customerData = {
+    const customerData: CustomerData = {
       name: customer.name,
       email: customer.email || 'naotemmail@goodtrip.com.br',
-      type: 'individual' as const,
+      type: 'individual',
       document: customer.document.replace(/\D/g, ''),
       document_type: customer.document_type || 'CPF',
       phones: {
@@ -160,14 +243,29 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    const items = [{
+    const items: OrderItem[] = [{
       code: "PASSAGEM_ONIBUS",
-      description: metadata?.title || 'Passagem de ônibus',
+      description: (metadata?.title as string) || 'Passagem de ônibus',
       amount: amount,
       quantity: 1
     }];
 
     if (payment_method === 'credit_card') {
+      if (!card_number || !card_name || !card_expiry || !card_cvv) {
+        return NextResponse.json({
+          success: false,
+          message: 'Dados do cartão incompletos'
+        }, { status: 400 });
+      }
+
+      const expiryParts = card_expiry.split('/');
+      if (expiryParts.length !== 2) {
+        return NextResponse.json({
+          success: false,
+          message: 'Data de validade inválida'
+        }, { status: 400 });
+      }
+
       const orderData = {
         items,
         customer: customerData,
@@ -179,8 +277,8 @@ export async function POST(request: NextRequest) {
             card: {
               number: card_number.replace(/\s/g, ''),
               holder_name: card_name,
-              exp_month: parseInt(card_expiry.split('/')[0]),
-              exp_year: parseInt('20' + card_expiry.split('/')[1]),
+              exp_month: parseInt(expiryParts[0]),
+              exp_year: parseInt('20' + expiryParts[1]),
               cvv: card_cvv,
               billing_address: {
                 line_1: 'Rua Exemplo, 123',
@@ -210,17 +308,17 @@ export async function POST(request: NextRequest) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData: unknown = await response.json();
         console.error('❌ Erro da API Pagar.me:', errorData);
         
         return NextResponse.json({
           success: false,
-          message: errorData.message || 'Erro ao processar pagamento',
+          message: (errorData as { message?: string }).message || 'Erro ao processar pagamento',
           error: errorData
         }, { status: response.status });
       }
 
-      const order = await response.json();
+      const order: PagarmeOrder = await response.json();
       const charge = order.charges[0];
       const status = charge.status;
 
@@ -284,17 +382,17 @@ export async function POST(request: NextRequest) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData: unknown = await response.json();
         console.error('❌ Erro da API Pagar.me:', errorData);
         
         return NextResponse.json({
           success: false,
-          message: errorData.message || 'Erro ao gerar PIX',
+          message: (errorData as { message?: string }).message || 'Erro ao gerar PIX',
           error: errorData
         }, { status: response.status });
       }
 
-      const order = await response.json();
+      const order: PagarmeOrder = await response.json();
       const charge = order.charges[0];
       const lastTransaction = charge.last_transaction;
 

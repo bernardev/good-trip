@@ -10,20 +10,24 @@ const getAuthHeader = (): string => {
   return `Basic ${auth}`;
 };
 
+type Passageiro = {
+  assento: string;
+  nomeCompleto: string;
+  docNumero: string;
+  docTipo: string;
+  nacionalidade: string;
+  telefone: string;
+  email?: string;
+};
+
 type ReservaData = {
   servico?: string;
   origem?: string;
   destino?: string;
   data?: string;
   assentos: string[];
-  passageiros: Array<{
-    assento: string;
-    nomeCompleto: string;
-    documento?: string;
-    telefone: string;
-    email?: string;
-  }>;
-  preco: number;
+  passageiros: Passageiro[];
+  preco: number; // 🔥 IMPORTANTE: Este é o valor TOTAL de todos os assentos, não por assento
   chargeId?: string;
   metadata?: Record<string, unknown>;
 };
@@ -60,6 +64,23 @@ type EstornoResult = {
   error?: string;
 };
 
+type EstornoKVData = {
+  status: string;
+  timestamp: string;
+  motivo?: string;
+  valorEstorno?: number;
+  resultado?: PagarmeRefundResponse;
+};
+
+type EstornoPendenteKVData = {
+  orderId: string;
+  valorEstorno: number;
+  bilhetesEmitidos: number;
+  bilhetesEsperados: number;
+  motivo: string;
+  timestamp: string;
+};
+
 /**
  * Estorna automaticamente um pedido quando a emissão de bilhetes falha
  * @param orderId - ID do pedido no Pagar.me
@@ -91,19 +112,21 @@ export async function estornarAutomatico(
       return { success: false, estornado: false, error: 'Já estornado anteriormente' };
     }
 
-    // 3️⃣ CALCULAR valor do estorno (não confiar em input externo)
-    const valorOriginal = reservaData.preco * reservaData.assentos.length;
-    const valorPorAssento = reservaData.preco;
-    const assentosNaoEmitidos = reservaData.assentos.length - bilhetesEmitidos;
+    // 3️⃣ CALCULAR valor do estorno (CORRETO)
+    // 🔥 reservaData.preco JÁ É O VALOR TOTAL de todos os assentos
+    const valorOriginal = reservaData.preco;
+    const totalAssentos = reservaData.assentos.length;
+    const valorPorAssento = valorOriginal / totalAssentos;
+    const assentosNaoEmitidos = totalAssentos - bilhetesEmitidos;
     const valorEstorno = valorPorAssento * assentosNaoEmitidos;
 
     console.log('💰 Cálculo do estorno:', {
-      valorOriginal,
-      valorPorAssento,
-      assentosTotal: reservaData.assentos.length,
+      valorOriginal: valorOriginal.toFixed(2),
+      valorPorAssento: valorPorAssento.toFixed(2),
+      assentosTotal: totalAssentos,
       bilhetesEmitidos,
       assentosNaoEmitidos,
-      valorEstorno
+      valorEstorno: valorEstorno.toFixed(2)
     });
 
     // 4️⃣ VALIDAR lógica de negócio
@@ -123,14 +146,16 @@ export async function estornarAutomatico(
     if (valorEstorno > VALOR_MAX_ESTORNO_AUTOMATICO) {
       console.log(`⚠️ Valor de estorno (R$ ${valorEstorno.toFixed(2)}) requer aprovação manual`);
       
-      await kv.set(`estorno-pendente:${orderId}`, {
+      const dadosPendentes: EstornoPendenteKVData = {
         orderId,
         valorEstorno,
         bilhetesEmitidos,
         bilhetesEsperados: reservaData.assentos.length,
         motivo,
         timestamp: new Date().toISOString()
-      }, { ex: 604800 }); // 7 dias
+      };
+
+      await kv.set(`estorno-pendente:${orderId}`, dadosPendentes, { ex: 604800 }); // 7 dias
 
       await salvarLogEstorno(orderId, reservaData, bilhetesEmitidos, valorEstorno, motivo, 'REQUER_APROVACAO');
       
@@ -144,12 +169,14 @@ export async function estornarAutomatico(
     }
 
     // 6️⃣ MARCAR como processando ANTES de estornar (evita duplicata)
-    await kv.set(`estorno:${orderId}`, {
+    const dadosProcessando: EstornoKVData = {
       status: 'PROCESSANDO',
       timestamp: new Date().toISOString(),
       motivo,
       valorEstorno
-    }, { ex: 86400 }); // 24 horas
+    };
+
+    await kv.set(`estorno:${orderId}`, dadosProcessando, { ex: 86400 }); // 24 horas
 
     // 7️⃣ VALIDAR chargeId
     if (!reservaData.chargeId) {
@@ -169,18 +196,20 @@ export async function estornarAutomatico(
     }
 
     // 9️⃣ ATUALIZAR status como concluído
-    await kv.set(`estorno:${orderId}`, {
+    const dadosConcluido: EstornoKVData = {
       status: 'CONCLUIDO',
       timestamp: new Date().toISOString(),
       resultado
-    }, { ex: 2592000 }); // 30 dias
+    };
+
+    await kv.set(`estorno:${orderId}`, dadosConcluido, { ex: 2592000 }); // 30 dias
 
     // 🔟 SALVAR log completo
     await salvarLogEstorno(orderId, reservaData, bilhetesEmitidos, valorEstorno, motivo, 'CONCLUIDO', undefined, resultado);
 
     console.log('✅ Estorno processado com sucesso:', {
       orderId,
-      valorEstornado: valorEstorno,
+      valorEstornado: valorEstorno.toFixed(2),
       refundId: resultado.id
     });
 
@@ -231,7 +260,8 @@ async function verificarSeJaEstornado(orderId: string): Promise<boolean> {
     }
     
     const estornoData = typeof estorno === 'string' ? JSON.parse(estorno) : estorno;
-    return estornoData.status === 'CONCLUIDO' || estornoData.status === 'PROCESSANDO';
+    const typedData = estornoData as EstornoKVData;
+    return typedData.status === 'CONCLUIDO' || typedData.status === 'PROCESSANDO';
   } catch (error) {
     console.error('❌ Erro ao verificar estorno:', error);
     return false;
@@ -243,13 +273,13 @@ async function verificarSeJaEstornado(orderId: string): Promise<boolean> {
  */
 async function estornarPagarme(
   chargeId: string,
-  valorCentavos: number
+  valorReais: number
 ): Promise<PagarmeRefundResponse | null> {
   try {
     const url = `${PAGARME_API_URL}/charges/${chargeId}/refund`;
     
     // Converter para centavos (Pagar.me trabalha com centavos)
-    const amountCentavos = Math.round(valorCentavos * 100);
+    const amountCentavos = Math.round(valorReais * 100);
     
     const payload = {
       amount: amountCentavos
@@ -257,7 +287,7 @@ async function estornarPagarme(
 
     console.log('📤 Enviando estorno para Pagar.me:', {
       chargeId,
-      valorReais: valorCentavos,
+      valorReais: valorReais.toFixed(2),
       valorCentavos: amountCentavos
     });
 
@@ -271,12 +301,12 @@ async function estornarPagarme(
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData: unknown = await response.json();
       console.error('❌ Erro da API Pagar.me:', errorData);
       return null;
     }
 
-    const result = await response.json();
+    const result: unknown = await response.json();
     console.log('✅ Estorno processado na Pagar.me:', result);
     
     return result as PagarmeRefundResponse;
@@ -305,7 +335,7 @@ async function salvarLogEstorno(
       timestamp: new Date().toISOString(),
       orderId,
       chargeId: reservaData.chargeId,
-      valorOriginal: reservaData.preco * reservaData.assentos.length,
+      valorOriginal: reservaData.preco, // 🔥 CORRETO: preco já é o total
       bilhetesEsperados: reservaData.assentos.length,
       bilhetesEmitidos,
       valorEstornado,

@@ -115,13 +115,21 @@ export default async function AssentosPage({ searchParams }: Props) {
     );
   }
 
-  const poltronas = (json.seats?.mapaPoltrona ?? [])
-    .map((p): { numero: string; livre: boolean; classe?: string } => ({
-      numero: String(p.numero ?? ""),
-      livre: seatIsFree(p),
-      classe: p.classe,
-    }))
-    .filter(p => p.numero !== "" && p.numero.toUpperCase() !== "WC");
+const poltronas = (json.seats?.mapaPoltrona ?? [])
+  .map((p): { numero: string; livre: boolean; classe?: string } => ({
+    numero: String(p.numero ?? ""),
+    livre: seatIsFree(p),
+    classe: p.classe,
+  }))
+  .filter(p => {
+    // Filtrar: não vazio, não WC, e DEVE SER NÚMERO
+    if (!p.numero || p.numero === "") return false;
+    if (p.numero.toUpperCase() === "WC") return false;
+    
+    // ✅ NOVO: Aceitar apenas números
+    const isNumeric = /^\d+$/.test(p.numero);
+    return isNumeric;
+  });
 
   const meta = {
     poltronasTotal: json.serviceMeta?.poltronasTotal,

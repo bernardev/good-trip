@@ -37,18 +37,28 @@ export default function AssentosClient({ poltronas, meta, query, maxSelect = 5 }
   const [selected, setSelected] = useState<string[]>([]);
 
   // Organizar poltronas em layout de ônibus (2 colunas + corredor + 2 colunas)
-  const layoutPoltronas = useMemo(() => {
+const layoutPoltronas = useMemo(() => {
+    // 1️⃣ ORDENAR ASSENTOS NUMERICAMENTE
+    const poltronasOrdenadas = [...poltronas].sort((a, b) => {
+      const numA = parseInt(a.numero) || 0;
+      const numB = parseInt(b.numero) || 0;
+      return numA - numB;
+    });
+
     const rows: Array<{
       left: Poltrona[];
       right: Poltrona[];
     }> = [];
 
-    // Agrupar de 4 em 4 (2 esquerda, 2 direita)
-    for (let i = 0; i < poltronas.length; i += 4) {
-      const chunk = poltronas.slice(i, i + 4);
+    // 2️⃣ Agrupar de 4 em 4 e INVERTER lado direito
+    for (let i = 0; i < poltronasOrdenadas.length; i += 4) {
+      const chunk = poltronasOrdenadas.slice(i, i + 4);
+      
+      // Esquerda: 01(J), 02(C)
+      // Direita: 04(C), 03(J) <- INVERTIDO
       rows.push({
-        left: chunk.slice(0, 2),
-        right: chunk.slice(2, 4)
+        left: [chunk[0], chunk[1]].filter(Boolean),      // [01, 02]
+        right: [chunk[3], chunk[2]].filter(Boolean)      // [04, 03] INVERTIDO!
       });
     }
 

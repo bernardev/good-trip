@@ -105,7 +105,7 @@ export default function Hero() {
       {/* conteúdo */}
       <div className="relative z-10 mx-auto max-w-7xl px-4 md:px-8 py-16 md:py-24 grid content-center">
         <h1
-          className={`${exo2.className} text-4xl md:text-6xl font-extrabold leading-[1.05] tracking-tight drop-shadow`}
+          className={`${exo2.className} text-4xl md:text-6xl font-extrabold leading-[1.05] tracking-tight drop-shadow text-center`}
           style={titleStyle}
         >
           {b.title || (
@@ -114,8 +114,7 @@ export default function Hero() {
             </>
           )}
         </h1>
-
-        <p className="mt-4 max-w-2xl" style={subtitleStyle}>
+        <p className="mt-4 max-w-2xl text-center mx-auto" style={subtitleStyle}>
           {b.subtitle || "Compare horários, preços e rotas. Reserve em poucos cliques."}
         </p>
 
@@ -142,7 +141,7 @@ export default function Hero() {
         )}
 
         {/* badges */}
-        <div className="mt-6 flex flex-wrap gap-2 text-xs text-white/85">
+        <div className="mt-6 flex flex-wrap justify-center gap-2 text-xs text-white/85">
           <span className="rounded-full bg-white/15 px-3 py-1">Atendimento 24/7</span>
           <span className="rounded-full bg-white/15 px-3 py-1">Parcelamento</span>
           <span className="rounded-full bg-white/15 px-3 py-1">Parceiros oficiais</span>

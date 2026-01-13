@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { kv } from '@vercel/kv';
 import { estornarAutomatico } from '@/lib/estorno';
+import { gerarBilhetePDF } from '@/lib/bilhete-pdf';
+import { enviarBilhetePDFWhatsApp } from '@/lib/evolution-whatsapp';
 
 const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
@@ -291,6 +293,61 @@ export async function POST(req: NextRequest) {
     // 🔥 NOVO: Salvar no cache (30 dias = 2592000 segundos)
     await kv.set(`bilhete:${orderId}`, responseData, { ex: 2592000 });
     console.log('💾 Bilhete salvo no cache para futuras consultas');
+
+    // 🔥 NOVO: Enviar bilhete PDF via WhatsApp (não bloqueia resposta)
+    const primeiroPassageiro = reservaData.passageiros[0];
+    if (primeiroPassageiro?.telefone) {
+      (async () => {
+        try {
+          for (let i = 0; i < bilhetesEmitidos.length; i++) {
+            const bilhete = bilhetesEmitidos[i];
+            const passageiro = reservaData.passageiros[i] || primeiroPassageiro;
+            
+            const pdfBuffer = await gerarBilhetePDF({
+              localizador: bilhete.localizador,
+              numeroBilhete: bilhete.numeroBilhete,
+              passageiro: {
+                nome: passageiro.nomeCompleto,
+                documento: passageiro.docNumero
+              },
+              origemNome: responseData.origemNome || 'Origem',
+              destinoNome: responseData.destinoNome || 'Destino',
+              dataFormatada: responseData.dataFormatada || '',
+              horarioSaida: responseData.horarioSaida || '',
+              horarioChegada: responseData.horarioChegada || '',
+              assento: bilhete.poltrona,
+              classe: responseData.classe || 'CONVENCIONAL',
+              empresa: responseData.empresa || '',
+              total: responseData.total / bilhetesEmitidos.length,
+              tarifa: responseData.tarifa || 0,
+              pedagio: responseData.pedagio || 0,
+              taxaEmbarque: responseData.taxaEmbarque || 0,
+              seguro: responseData.seguro || 0,
+              outros: responseData.outros || 0
+            });
+
+            const nomeArquivo = `Bilhete-GoodTrip-${bilhete.localizador}.pdf`;
+            const caption = `🎫 Seu bilhete Good Trip\n\n` +
+                          `✈️ ${responseData.origemNome} → ${responseData.destinoNome}\n` +
+                          `📅 ${responseData.dataFormatada}\n` +
+                          `💺 Assento ${bilhete.poltrona}\n` +
+                          `🔢 Localizador: ${bilhete.localizador}\n\n` +
+                          `Boa viagem! 🚌`;
+
+            await enviarBilhetePDFWhatsApp(
+              passageiro.telefone,
+              pdfBuffer,
+              nomeArquivo,
+              caption
+            );
+          }
+        } catch (error) {
+          console.error('⚠️ Erro ao enviar PDF via WhatsApp (não crítico):', error);
+        }
+      })();
+      
+      console.log('📱 Enviando bilhetes em PDF via WhatsApp...');
+    }
 
     return NextResponse.json(responseData);
 

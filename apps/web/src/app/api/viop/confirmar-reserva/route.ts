@@ -4,6 +4,7 @@ import { kv } from '@vercel/kv';
 import { estornarAutomatico } from '@/lib/estorno';
 import { gerarBilhetePDF } from '@/lib/bilhete-pdf';
 import { enviarBilhetePDFWhatsApp } from '@/lib/evolution-whatsapp';
+import { notificarAdmin } from '@/lib/notificacoes-admin';
 
 const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
@@ -183,6 +184,18 @@ export async function POST(req: NextRequest) {
         const mensagemErro = erroAssento instanceof Error ? erroAssento.message : 'Erro desconhecido';
         console.error(`❌ Erro ao processar assento ${assento}:`, mensagemErro);
         
+        // 🔥 Notificar admin sobre erro
+        notificarAdmin({
+          tipo: 'ERRO_EMISSAO',
+          orderId,
+          passageiro: reservaData.passageiros[0]?.nomeCompleto,
+          origem: primeiroBloqueioDados?.origem?.cidade,
+          destino: primeiroBloqueioDados?.destino?.cidade,
+          valor: reservaData.preco,
+          erro: `Falha no assento ${assento}`,
+          detalhes: mensagemErro
+        }).catch(console.error);
+        
         // 🔥 ESTORNO AUTOMÁTICO
         console.log(`\n💸 Iniciando estorno automático...`);
         console.log(`📊 Situação: ${bilhetesEmitidos.length} de ${reservaData.assentos.length} bilhetes emitidos`);
@@ -349,11 +362,32 @@ export async function POST(req: NextRequest) {
       console.log('📱 Enviando bilhetes em PDF via WhatsApp...');
     }
 
+    // 🔥 Notificar admin sobre bilhete emitido com sucesso
+    notificarAdmin({
+      tipo: 'BILHETE_EMITIDO',
+      orderId,
+      passageiro: primeiroPassageiro?.nomeCompleto,
+      origem: responseData.origemNome,
+      destino: responseData.destinoNome,
+      assentos: responseData.assentos,
+      valor: responseData.total
+    }).catch(console.error);
+
     return NextResponse.json(responseData);
 
   } catch (error) {
     const mensagemErro = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('❌ Erro fatal ao confirmar reserva:', mensagemErro);
+    
+    // 🔥 Notificar admin sobre erro fatal
+    if (orderId) {
+      notificarAdmin({
+        tipo: 'ERRO_EMISSAO',
+        orderId,
+        erro: 'Erro fatal',
+        detalhes: mensagemErro
+      }).catch(console.error);
+    }
     
     // 🔥 ESTORNO AUTOMÁTICO em caso de erro fatal
     if (orderId && bilhetesEmitidos.length > 0) {

@@ -1,6 +1,7 @@
 // apps/web/src/app/api/payments/pagarme/process/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
+import { notificarAdmin } from '@/lib/notificacoes-admin';
 
 const PAGARME_SECRET_KEY = process.env.PAGARME_SECRET_KEY || '';
 const PAGARME_API_URL = 'https://api.pagar.me/core/v5';
@@ -28,7 +29,7 @@ type ReservaData = {
   data?: string;
   assentos: string[];
   passageiros: Passageiro[];
-  preco: number; // 🔥 IMPORTANTE: Este é o valor TOTAL de todos os assentos
+  preco: number;
   chargeId?: string;
   metadata?: Record<string, unknown>;
 };
@@ -110,12 +111,11 @@ type RequestBody = {
   installments?: number;
 };
 
-// 🔥 Salvar dados da reserva no Vercel KV
 async function salvarDadosReserva(orderId: string, chargeId: string, data: ReservaData): Promise<void> {
   try {
     const dadosComChargeId: ReservaData = {
       ...data,
-      chargeId // 🔥 IMPORTANTE: salvar chargeId para estorno
+      chargeId
     };
     
     await kv.set(`reserva:${orderId}`, JSON.stringify(dadosComChargeId), { ex: 3600 });
@@ -148,8 +148,6 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // 🔥 Preparar dados da reserva com múltiplos passageiros
-    // IMPORTANTE: amount vem em centavos, preco deve ser em reais
     const reservaData: ReservaData = {
       servico: booking?.servico,
       origem: booking?.origem,
@@ -157,7 +155,7 @@ export async function POST(request: NextRequest) {
       data: booking?.data,
       assentos: booking?.assentos || [],
       passageiros: booking?.passageiros || [],
-      preco: amount / 100, // 🔥 CONVERTER CENTAVOS → REAIS - Este é o valor TOTAL
+      preco: amount / 100,
       metadata,
     };
 
@@ -183,6 +181,15 @@ export async function POST(request: NextRequest) {
 
       if (payment_method === 'credit_card') {
         if (card_cvv && card_cvv.startsWith('6')) {
+          // 🔥 Notificar erro
+          notificarAdmin({
+            tipo: 'ERRO_PAGAMENTO',
+            passageiro: customer.name,
+            valor: amount / 100,
+            erro: 'Cartão recusado (simulação)',
+            detalhes: 'CVV iniciado com 6'
+          }).catch(console.error);
+
           return NextResponse.json({
             success: false,
             message: 'Cartão recusado pelo banco emissor',
@@ -193,8 +200,18 @@ export async function POST(request: NextRequest) {
         const orderId = `sim_order_${Date.now()}`;
         const chargeId = `sim_charge_${Date.now()}`;
         
-        // 🔥 SALVAR dados da reserva COM chargeId
         await salvarDadosReserva(orderId, chargeId, reservaData);
+
+        // 🔥 Notificar pagamento aprovado
+        notificarAdmin({
+          tipo: 'CARTAO_PROCESSADO',
+          orderId,
+          passageiro: customer.name,
+          origem: booking?.origem,
+          destino: booking?.destino,
+          valor: amount / 100,
+          cupom: metadata?.cupom as string | undefined
+        }).catch(console.error);
 
         return NextResponse.json({
           success: true,
@@ -210,8 +227,17 @@ export async function POST(request: NextRequest) {
         const orderId = `sim_pix_order_${Date.now()}`;
         const chargeId = `sim_pix_charge_${Date.now()}`;
         
-        // 🔥 SALVAR dados da reserva COM chargeId
         await salvarDadosReserva(orderId, chargeId, reservaData);
+
+        // 🔥 Notificar PIX gerado
+        notificarAdmin({
+          tipo: 'PIX_GERADO',
+          orderId,
+          passageiro: customer.name,
+          origem: booking?.origem,
+          destino: booking?.destino,
+          valor: amount / 100
+        }).catch(console.error);
 
         return NextResponse.json({
           success: true,
@@ -311,6 +337,15 @@ export async function POST(request: NextRequest) {
         const errorData: unknown = await response.json();
         console.error('❌ Erro da API Pagar.me:', errorData);
         
+        // 🔥 Notificar erro
+        notificarAdmin({
+          tipo: 'ERRO_PAGAMENTO',
+          passageiro: customer.name,
+          valor: amount / 100,
+          erro: 'Erro Pagar.me',
+          detalhes: (errorData as { message?: string }).message || 'Erro desconhecido'
+        }).catch(console.error);
+        
         return NextResponse.json({
           success: false,
           message: (errorData as { message?: string }).message || 'Erro ao processar pagamento',
@@ -324,10 +359,20 @@ export async function POST(request: NextRequest) {
 
       console.log('✅ Resposta da Pagar.me:', { order_id: order.id, charge_id: charge.id, status });
 
-      // 🔥 SALVAR dados da reserva COM chargeId
       await salvarDadosReserva(order.id, charge.id, reservaData);
 
       if (status === 'paid') {
+        // 🔥 Notificar pagamento aprovado
+        notificarAdmin({
+          tipo: 'CARTAO_PROCESSADO',
+          orderId: order.id,
+          passageiro: customer.name,
+          origem: booking?.origem,
+          destino: booking?.destino,
+          valor: amount / 100,
+          cupom: metadata?.cupom as string | undefined
+        }).catch(console.error);
+
         return NextResponse.json({
           success: true,
           order_id: order.id,
@@ -343,6 +388,17 @@ export async function POST(request: NextRequest) {
         });
       } else if (status === 'failed') {
         const errorMessage = charge.last_transaction?.gateway_response?.message || 'Pagamento recusado';
+        
+        // 🔥 Notificar falha
+        notificarAdmin({
+          tipo: 'ERRO_PAGAMENTO',
+          orderId: order.id,
+          passageiro: customer.name,
+          valor: amount / 100,
+          erro: 'Pagamento recusado',
+          detalhes: errorMessage
+        }).catch(console.error);
+        
         return NextResponse.json({
           success: false,
           message: errorMessage
@@ -385,6 +441,15 @@ export async function POST(request: NextRequest) {
         const errorData: unknown = await response.json();
         console.error('❌ Erro da API Pagar.me:', errorData);
         
+        // 🔥 Notificar erro
+        notificarAdmin({
+          tipo: 'ERRO_PAGAMENTO',
+          passageiro: customer.name,
+          valor: amount / 100,
+          erro: 'Erro ao gerar PIX',
+          detalhes: (errorData as { message?: string }).message || 'Erro desconhecido'
+        }).catch(console.error);
+        
         return NextResponse.json({
           success: false,
           message: (errorData as { message?: string }).message || 'Erro ao gerar PIX',
@@ -409,8 +474,17 @@ export async function POST(request: NextRequest) {
                         charge?.qr_code_url ||
                         '';
 
-      // 🔥 SALVAR dados da reserva COM chargeId
       await salvarDadosReserva(order.id, charge.id, reservaData);
+
+      // 🔥 Notificar PIX gerado
+      notificarAdmin({
+        tipo: 'PIX_GERADO',
+        orderId: order.id,
+        passageiro: customer.name,
+        origem: booking?.origem,
+        destino: booking?.destino,
+        valor: amount / 100
+      }).catch(console.error);
 
       return NextResponse.json({
         success: true,
@@ -435,6 +509,13 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Erro ao processar pagamento:', error);
+    
+    // 🔥 Notificar erro crítico
+    notificarAdmin({
+      tipo: 'ERRO_PAGAMENTO',
+      erro: 'Erro interno',
+      detalhes: error instanceof Error ? error.message : 'Erro desconhecido'
+    }).catch(console.error);
     
     return NextResponse.json({
       success: false,

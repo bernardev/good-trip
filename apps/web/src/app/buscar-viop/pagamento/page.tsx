@@ -4,7 +4,7 @@
 import { Suspense } from 'react';
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { CreditCard, QrCode, Mail, Bus, Clock, Lock, Shield, CheckCircle2, AlertCircle, Info, Phone, User } from 'lucide-react';
+import { CreditCard, QrCode, Mail, Bus, Clock, Lock, Shield, CheckCircle2, AlertCircle, Info, Phone, User, Tag, X } from 'lucide-react';
 import { getObservacaoRota, getCorObservacao } from '@/lib/observacoes-rotas';
 
 type Query = {
@@ -34,7 +34,6 @@ type ApiOnibusRes = {
   };
 };
 
-// 🔥 Tipo para passageiro
 type Passageiro = {
   assento: string;
   nomeCompleto: string;
@@ -44,6 +43,9 @@ type Passageiro = {
   telefone: string;
   email: string;
 };
+
+// 🔥 CUPONS VÁLIDOS (hard-coded)
+const CUPONS_VALIDOS = ['BEMVINDO10', 'PRIMEIRAVIAGEM', 'DESCONTO10'];
 
 // 🔥 TAXAS DE JUROS
 const TAXAS_JUROS: Record<number, number> = {
@@ -80,6 +82,11 @@ function PagamentoContent() {
   const [cardCvv, setCardCvv] = useState('');
   const [installments, setInstallments] = useState('1');
 
+  // 🔥 NOVO: Estados do cupom
+  const [cupomInput, setCupomInput] = useState('');
+  const [cupomAplicado, setCupomAplicado] = useState<string | null>(null);
+  const [cupomErro, setCupomErro] = useState<string | null>(null);
+
   const q = useMemo<Query>(() => ({
     servico: sp.get('servico') ?? undefined,
     origem: sp.get('origem') ?? undefined,
@@ -90,11 +97,9 @@ function PagamentoContent() {
     preco: sp.get('preco') ?? undefined,
   }), [sp]);
 
-  // 🔥 Parse passageiros - TIPADO
   const passageiros = useMemo<Passageiro[]>(() => {
     try {
       const parsed = q.passageiros ? JSON.parse(decodeURIComponent(q.passageiros)) : [];
-      // Validar estrutura
       if (Array.isArray(parsed)) {
         return parsed.filter((p): p is Passageiro => 
           typeof p === 'object' && 
@@ -183,9 +188,15 @@ function PagamentoContent() {
     return subtotal * 0.05;
   }, [subtotal]);
 
+  // 🔥 NOVO: Cálculo do desconto
+  const valorDesconto = useMemo<number>(() => {
+    if (!cupomAplicado) return 0;
+    return subtotal * 0.10; // 10% de desconto
+  }, [cupomAplicado, subtotal]);
+
   const totalSemJuros = useMemo<number>(() => {
-    return subtotal + taxaServico;
-  }, [subtotal, taxaServico]);
+    return subtotal + taxaServico - valorDesconto;
+  }, [subtotal, taxaServico, valorDesconto]);
 
   const totalComJuros = useMemo<number>(() => {
     const numParcelas = parseInt(installments);
@@ -209,12 +220,38 @@ function PagamentoContent() {
     });
   }, [q.data]);
 
-  // 🔥 Buscar observação da rota
   const observacao = getObservacaoRota(
     origemNome,
     destinoNome,
     saidaHorario
   );
+
+  // 🔥 NOVO: Função para aplicar cupom
+  const aplicarCupom = useCallback(() => {
+    setCupomErro(null);
+    
+    const cupomUpper = cupomInput.trim().toUpperCase();
+    
+    if (!cupomUpper) {
+      setCupomErro('Digite um cupom');
+      return;
+    }
+    
+    if (CUPONS_VALIDOS.includes(cupomUpper)) {
+      setCupomAplicado(cupomUpper);
+      setCupomInput('');
+      setCupomErro(null);
+    } else {
+      setCupomErro('Cupom inválido');
+    }
+  }, [cupomInput]);
+
+  // 🔥 NOVO: Função para remover cupom
+  const removerCupom = useCallback(() => {
+    setCupomAplicado(null);
+    setCupomInput('');
+    setCupomErro(null);
+  }, []);
 
   const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\s/g, '');
@@ -314,7 +351,9 @@ function PagamentoContent() {
             },
             metadata: {
               title,
-              passenger_name: primeiroPassageiro.nomeCompleto
+              passenger_name: primeiroPassageiro.nomeCompleto,
+              cupom: cupomAplicado || undefined,
+              desconto: valorDesconto > 0 ? valorDesconto : undefined
             }
           })
         });
@@ -350,7 +389,9 @@ function PagamentoContent() {
             },
             metadata: {
               title,
-              passenger_name: primeiroPassageiro.nomeCompleto
+              passenger_name: primeiroPassageiro.nomeCompleto,
+              cupom: cupomAplicado || undefined,
+              desconto: valorDesconto > 0 ? valorDesconto : undefined
             }
           })
         });
@@ -372,7 +413,7 @@ function PagamentoContent() {
     }
   }, [
     paymentMethod, cardNumber, cardName, cardExpiry, cardCvv, 
-    installments, totalComJuros, totalSemJuros, q, title, router, passageiros, primeiroPassageiro
+    installments, totalComJuros, totalSemJuros, q, title, router, passageiros, primeiroPassageiro, cupomAplicado, valorDesconto
   ]);
 
   if (loadingViagem) {
@@ -645,7 +686,6 @@ function PagamentoContent() {
                 </div>
               </div>
 
-              {/* 🔥 Observação da rota */}
               {observacao && (
                 <div className={`rounded-xl border-2 p-3 mb-4 flex items-start gap-2 ${getCorObservacao(observacao.tipo)}`}>
                   <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -656,7 +696,6 @@ function PagamentoContent() {
                 </div>
               )}
 
-              {/* 🔥 Card com TODOS os dados dos passageiros - TIPADO */}
               <div className="rounded-xl border border-slate-200 p-4 mb-4">
                 <h4 className="font-semibold mb-3 text-sm text-slate-700 flex items-center gap-2">
                   <User className="w-4 h-4 text-blue-600" />
@@ -691,6 +730,59 @@ function PagamentoContent() {
                 </div>
               </div>
 
+              {/* 🔥 NOVO: Campo de cupom */}
+              <div className="rounded-xl border-2 border-purple-200 bg-purple-50 p-4 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Tag className="w-4 h-4 text-purple-600" />
+                  <h4 className="font-semibold text-sm text-purple-900">Cupom de Desconto</h4>
+                </div>
+                
+                {!cupomAplicado ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={cupomInput}
+                        onChange={(e) => setCupomInput(e.target.value.toUpperCase())}
+                        onKeyPress={(e) => e.key === 'Enter' && aplicarCupom()}
+                        placeholder="Digite seu cupom"
+                        className="flex-1 rounded-lg border-2 border-purple-200 px-3 py-2 text-sm focus:border-purple-600 focus:ring-2 focus:ring-purple-600 focus:ring-opacity-20 transition-all uppercase"
+                      />
+                      <button
+                        type="button"
+                        onClick={aplicarCupom}
+                        className="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors"
+                      >
+                        Aplicar
+                      </button>
+                    </div>
+                    {cupomErro && (
+                      <p className="text-xs text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {cupomErro}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between bg-green-100 border border-green-300 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      <div>
+                        <p className="font-bold text-green-900 text-sm">{cupomAplicado}</p>
+                        <p className="text-xs text-green-700">10% de desconto aplicado!</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removerCupom}
+                      className="text-green-700 hover:text-green-900 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div className="border-t border-slate-200 pt-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-slate-600">Subtotal</span>
@@ -700,6 +792,14 @@ function PagamentoContent() {
                   <span className="text-slate-600">Taxa de serviço (5%)</span>
                   <span className="font-medium text-blue-600">R$ {taxaServico.toFixed(2)}</span>
                 </div>
+                
+                {/* 🔥 NOVO: Mostrar desconto */}
+                {valorDesconto > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-green-600 font-medium">Desconto (10%)</span>
+                    <span className="font-medium text-green-600">- R$ {valorDesconto.toFixed(2)}</span>
+                  </div>
+                )}
                 
                 {paymentMethod === 'credit_card' && valorJuros > 0 && (
                   <div className="flex justify-between items-center mb-2">

@@ -290,87 +290,80 @@ export default function IdentificacaoClient({ query, meta }: Props) {
         <form onSubmit={onSubmit} className="space-y-6">
           
           {/* Loop: Um card para cada passageiro */}
-          {passageiros.map((passageiro, index) => (
-            <div key={index} className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg overflow-hidden">
-              <header className="bg-gradient-to-r from-blue-600 to-sky-600 px-6 py-4">
-                <h2 className="text-lg font-black text-white">Passageiro {index + 1}</h2>
-                <p className="text-sm text-blue-100">Assento {passageiro.assento}</p>
-              </header>
+{passageiros.map((passageiro, index) => (
+  <div key={index} className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg overflow-hidden">
+    <header className="bg-gradient-to-r from-blue-600 to-sky-600 px-6 py-4">
+      <h2 className="text-lg font-black text-white">Passageiro {index + 1}</h2>
+      <p className="text-sm text-blue-100">Assento {passageiro.assento}</p>
+    </header>
 
-              <div className="p-6 space-y-5">
-                {/* Nome Completo */}
-                <div>
-                  <Field
-                    label="Nome Completo*"
-                    icon={<User2 className="w-4 h-4" />}
-                    value={passageiro.nomeCompleto}
-                    onChange={(v) => setPassageiro(index, "nomeCompleto", v)}
-                  />
-                </div>
+    <div className="p-6 space-y-5">
+      {/* Nome Completo */}
+      <div>
+        <Field
+          label="Nome Completo*"
+          icon={<User2 className="w-4 h-4" />}
+          value={passageiro.nomeCompleto}
+          onChange={(v) => setPassageiro(index, "nomeCompleto", v)}
+        />
+      </div>
 
-                {/* Documentos - Grid 3 colunas iguais */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Select
-                    label="Tipo*"
-                    icon={<Hash className="w-4 h-4" />}
-                    value={passageiro.docTipo}
-                    onChange={(v) => setPassageiro(index, "docTipo", v as DocTipo)}
-                    options={[
-                      { label: "CPF", value: "CPF" },
-                      { label: "RG", value: "RG" },
-                      { label: "Passaporte", value: "Passaporte" },
-                    ]}
-                  />
-                  
-                  {/* 🔥 Campo CPF com validação visual */}
-                  {passageiro.docTipo === 'CPF' ? (
-                    <CPFField
-                      label="CPF*"
-                      icon={<Hash className="w-4 h-4" />}
-                      value={passageiro.docNumero}
-                      onChange={(v) => setPassageiro(index, "docNumero", maskCPF(v))}
-                      status={getCPFStatus(index)}
-                    />
-                  ) : (
-                    <Field
-                      label="Nº Documento*"
-                      icon={<Hash className="w-4 h-4" />}
-                      value={passageiro.docNumero}
-                      onChange={(v) => setPassageiro(index, "docNumero", v)}
-                    />
-                  )}
-                  
-                  <Field
-                    label="Cidadania*"
-                    icon={<ShieldCheck className="w-4 h-4" />}
-                    value={passageiro.nacionalidade}
-                    onChange={(v) => setPassageiro(index, "nacionalidade", v)}
-                  />
-                </div>
+      {/* Documentos - Grid 2 colunas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Select
+          label="Tipo*"
+          icon={<Hash className="w-4 h-4" />}
+          value={passageiro.docTipo}
+          onChange={(v) => setPassageiro(index, "docTipo", v as DocTipo)}
+          options={[
+            { label: "CPF", value: "CPF" },
+            { label: "RG", value: "RG" },
+            { label: "Passaporte", value: "Passaporte" },
+          ]}
+        />
+        
+        {/* 🔥 Campo CPF com validação visual */}
+        {passageiro.docTipo === 'CPF' ? (
+          <CPFField
+            label="CPF*"
+            icon={<Hash className="w-4 h-4" />}
+            value={passageiro.docNumero}
+            onChange={(v) => setPassageiro(index, "docNumero", maskCPF(v))}
+            status={getCPFStatus(index)}
+          />
+        ) : (
+          <Field
+            label="Nº Documento*"
+            icon={<Hash className="w-4 h-4" />}
+            value={passageiro.docNumero}
+            onChange={(v) => setPassageiro(index, "docNumero", v)}
+          />
+        )}
+      </div>
 
-                {/* Contato - Grid 2 colunas */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field
-                    type="tel"
-                    label="Telefone/WhatsApp*"
-                    icon={<Phone className="w-4 h-4" />}
-                    value={passageiro.telefone}
-                    onChange={(v) => setPassageiro(index, "telefone", maskPhone(v))}
-                    placeholder="(00) 00000-0000"
-                  />
-                  <Field
-                    type="email"
-                    label="E-mail*"
-                    icon={<Mail className="w-4 h-4" />}
-                    value={passageiro.email}
-                    onChange={(v) => setPassageiro(index, "email", v)}
-                    placeholder="[email protected]"
-                    required={true}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* Contato - Grid 2 colunas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field
+          type="tel"
+          label="Telefone/WhatsApp*"
+          icon={<Phone className="w-4 h-4" />}
+          value={passageiro.telefone}
+          onChange={(v) => setPassageiro(index, "telefone", maskPhone(v))}
+          placeholder="(00) 00000-0000"
+        />
+        <Field
+          type="email"
+          label="E-mail*"
+          icon={<Mail className="w-4 h-4" />}
+          value={passageiro.email}
+          onChange={(v) => setPassageiro(index, "email", v)}
+          placeholder="[email protected]"
+          required={true}
+        />
+      </div>
+    </div>
+  </div>
+))}
 
           {/* Card: Assentos */}
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-6">

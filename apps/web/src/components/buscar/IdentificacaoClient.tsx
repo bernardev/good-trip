@@ -1,3 +1,4 @@
+// apps/web/src/app/components/buscar/IdentificacaoClient.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -15,6 +16,8 @@ import {
   Phone,
   Clock,
   Info,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { getObservacaoRota, getCorObservacao } from '@/lib/observacoes-rotas';
 
@@ -77,6 +80,61 @@ function fmtTime(isoOrHm?: string | null): string {
   return isoOrHm;
 }
 
+// 🔥 NOVO: Funções de CPF
+function sanitizeCPF(cpf: string): string {
+  return cpf.replace(/\D/g, '');
+}
+
+function maskCPF(value: string): string {
+  const numbers = sanitizeCPF(value);
+  if (numbers.length <= 3) return numbers;
+  if (numbers.length <= 6) return `${numbers.slice(0, 3)}.${numbers.slice(3)}`;
+  if (numbers.length <= 9) return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6)}`;
+  return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9, 11)}`;
+}
+
+function validateCPF(cpf: string): boolean {
+  const numbers = sanitizeCPF(cpf);
+  
+  // CPF deve ter exatamente 11 dígitos
+  if (numbers.length !== 11) return false;
+  
+  // Rejeitar CPFs com todos dígitos iguais
+  if (/^(\d)\1{10}$/.test(numbers)) return false;
+  
+  // Validar dígitos verificadores
+  const digits = numbers.split('').map(Number);
+  
+  // Validar primeiro dígito
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += digits[i] * (10 - i);
+  }
+  let remainder = (sum * 10) % 11;
+  if (remainder === 10) remainder = 0;
+  if (remainder !== digits[9]) return false;
+  
+  // Validar segundo dígito
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += digits[i] * (11 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10) remainder = 0;
+  if (remainder !== digits[10]) return false;
+  
+  return true;
+}
+
+// 🔥 NOVO: Máscara de telefone
+function maskPhone(value: string): string {
+  const numbers = value.replace(/\D/g, '');
+  if (numbers.length <= 2) return numbers;
+  if (numbers.length <= 6) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+  if (numbers.length <= 10) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`;
+  return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+}
+
 /** ===== Componente ===== */
 export default function IdentificacaoClient({ query, meta }: Props) {
   const [secsLeft, setSecsLeft] = useState<number>(10 * 60);
@@ -89,7 +147,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
   const mm = Math.floor(secsLeft / 60);
   const ss = secsLeft % 60;
 
-  // 🔥 Estado para múltiplos passageiros (um por assento)
+  // Estado para múltiplos passageiros
   const [passageiros, setPassageiros] = useState<PassageiroForm[]>(
     query.assentos.map(assento => ({
       assento,
@@ -98,7 +156,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
       docNumero: "",
       nacionalidade: "Brasil",
       telefone: "",
-      email: "", // 🔥 Agora é obrigatório
+      email: "",
     }))
   );
 
@@ -113,14 +171,22 @@ export default function IdentificacaoClient({ query, meta }: Props) {
     return meta?.preco;
   }, [meta?.preco, query.assentos]);
 
-  // 🔥 Atualizar dados de um passageiro específico
+  // Atualizar dados de um passageiro específico
   function setPassageiro(index: number, key: keyof PassageiroForm, val: string | DocTipo) {
     setPassageiros(prev => prev.map((p, i) => 
       i === index ? {...p, [key]: val} : p
     ));
   }
 
-  // 🔥 Validar todos os passageiros
+  // 🔥 NOVO: Validar CPF de um passageiro específico
+  function getCPFStatus(index: number): 'valid' | 'invalid' | 'empty' {
+    const p = passageiros[index];
+    if (p.docTipo !== 'CPF') return 'empty';
+    if (!p.docNumero.trim()) return 'empty';
+    return validateCPF(p.docNumero) ? 'valid' : 'invalid';
+  }
+
+  // Validar todos os passageiros
   function validate(): string | null {
     for (let i = 0; i < passageiros.length; i++) {
       const p = passageiros[i];
@@ -128,11 +194,22 @@ export default function IdentificacaoClient({ query, meta }: Props) {
         return `Passageiro ${i+1} (Assento ${p.assento}): Preencha o nome completo.`;
       if (!p.docNumero.trim()) 
         return `Passageiro ${i+1} (Assento ${p.assento}): Informe o documento.`;
+      
+      // 🔥 Validação específica de CPF
+      if (p.docTipo === 'CPF') {
+        const cpfClean = sanitizeCPF(p.docNumero);
+        if (cpfClean.length !== 11) {
+          return `Passageiro ${i+1} (Assento ${p.assento}): CPF deve ter 11 dígitos.`;
+        }
+        if (!validateCPF(p.docNumero)) {
+          return `Passageiro ${i+1} (Assento ${p.assento}): CPF inválido.`;
+        }
+      }
+      
       if (!p.telefone.trim()) 
         return `Passageiro ${i+1} (Assento ${p.assento}): Informe o telefone.`;
       if (!p.email.trim()) 
         return `Passageiro ${i+1} (Assento ${p.assento}): Informe o e-mail.`;
-      // Validação básica de email
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim())) 
         return `Passageiro ${i+1} (Assento ${p.assento}): E-mail inválido.`;
     }
@@ -151,13 +228,20 @@ export default function IdentificacaoClient({ query, meta }: Props) {
     setSubmitting(true);
 
     try {
+      // 🔥 Sanitizar CPF antes de enviar
+      const passageirosSanitizados = passageiros.map(p => ({
+        ...p,
+        docNumero: p.docTipo === 'CPF' ? sanitizeCPF(p.docNumero) : p.docNumero,
+        telefone: p.telefone.replace(/\D/g, ''), // Remove formatação do telefone também
+      }));
+
       const params = new URLSearchParams({
         servico: query.servico,
         origem: query.origem,
         destino: query.destino,
         data: query.data,
         assentos: query.assentos.join(","),
-        passageiros: JSON.stringify(passageiros),
+        passageiros: JSON.stringify(passageirosSanitizados),
         ...(typeof meta?.preco === "number" ? { preco: String(meta.preco) } : {}),
       });
       window.location.href = `/buscar-viop/pagamento?${params.toString()}`;
@@ -169,7 +253,6 @@ export default function IdentificacaoClient({ query, meta }: Props) {
   const origemDisplay = meta?.origemNome || query.origem;
   const destinoDisplay = meta?.destinoNome || query.destino;
 
-  // 🔥 NOVO: Buscar observação da rota
   const observacao = getObservacaoRota(
     origemDisplay,
     destinoDisplay,
@@ -201,12 +284,12 @@ export default function IdentificacaoClient({ query, meta }: Props) {
         </div>
       </div>
 
-      {/* Layout principal - GRID MAIS LARGO */}
+      {/* Layout principal */}
       <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-8">
         {/* Esquerda: Formulário */}
         <form onSubmit={onSubmit} className="space-y-6">
           
-          {/* 🔥 LOOP: Um card para cada passageiro */}
+          {/* Loop: Um card para cada passageiro */}
           {passageiros.map((passageiro, index) => (
             <div key={index} className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg overflow-hidden">
               <header className="bg-gradient-to-r from-blue-600 to-sky-600 px-6 py-4">
@@ -238,12 +321,25 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                       { label: "Passaporte", value: "Passaporte" },
                     ]}
                   />
-                  <Field
-                    label="Nº Documento*"
-                    icon={<Hash className="w-4 h-4" />}
-                    value={passageiro.docNumero}
-                    onChange={(v) => setPassageiro(index, "docNumero", v)}
-                  />
+                  
+                  {/* 🔥 Campo CPF com validação visual */}
+                  {passageiro.docTipo === 'CPF' ? (
+                    <CPFField
+                      label="CPF*"
+                      icon={<Hash className="w-4 h-4" />}
+                      value={passageiro.docNumero}
+                      onChange={(v) => setPassageiro(index, "docNumero", maskCPF(v))}
+                      status={getCPFStatus(index)}
+                    />
+                  ) : (
+                    <Field
+                      label="Nº Documento*"
+                      icon={<Hash className="w-4 h-4" />}
+                      value={passageiro.docNumero}
+                      onChange={(v) => setPassageiro(index, "docNumero", v)}
+                    />
+                  )}
+                  
                   <Field
                     label="Cidadania*"
                     icon={<ShieldCheck className="w-4 h-4" />}
@@ -259,7 +355,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                     label="Telefone/WhatsApp*"
                     icon={<Phone className="w-4 h-4" />}
                     value={passageiro.telefone}
-                    onChange={(v) => setPassageiro(index, "telefone", v)}
+                    onChange={(v) => setPassageiro(index, "telefone", maskPhone(v))}
                     placeholder="(00) 00000-0000"
                   />
                   <Field
@@ -333,7 +429,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
           </div>
         </form>
 
-        {/* Direita: Resumo Sticky - MAIS ESTREITO */}
+        {/* Direita: Resumo Sticky */}
         <aside className="xl:sticky xl:top-6 h-fit">
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-xl overflow-hidden">
             <header className="bg-gradient-to-r from-blue-600 to-sky-600 px-6 py-4">
@@ -358,7 +454,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                 <span className="font-semibold text-sm">{fmtDate(query.data)}</span>
               </div>
 
-              {/* 🔥 NOVO: Observação da rota */}
+              {/* Observação da rota */}
               {observacao && (
                 <div className={`px-3 py-2 rounded-lg border flex items-start gap-2 ${getCorObservacao(observacao.tipo)}`}>
                   <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -369,7 +465,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
                 </div>
               )}
 
-              {/* Grid Horários - 🔥 AGORA COM DADOS CORRETOS */}
+              {/* Grid Horários */}
               <div className="grid grid-cols-3 gap-2 bg-gradient-to-br from-blue-50 to-sky-50 rounded-xl p-3 border border-blue-200">
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-1 mb-1">
@@ -460,6 +556,63 @@ function Field({
         className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm focus:border-blue-600 focus:outline-none transition-colors"
         required={required}
       />
+    </label>
+  );
+}
+
+// 🔥 NOVO: Campo CPF com validação visual
+function CPFField({
+  label,
+  icon,
+  value,
+  onChange,
+  status,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  value: string;
+  onChange: (v: string) => void;
+  status: 'valid' | 'invalid' | 'empty';
+}) {
+  const borderColor = 
+    status === 'valid' ? 'border-green-500' :
+    status === 'invalid' ? 'border-red-500' :
+    'border-gray-200';
+    
+  const iconColor =
+    status === 'valid' ? 'text-green-600' :
+    status === 'invalid' ? 'text-red-600' :
+    'text-gray-400';
+
+  return (
+    <label className="block">
+      <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
+        {icon}
+        {label}
+      </span>
+      <div className="relative">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="000.000.000-00"
+          maxLength={14}
+          className={`w-full rounded-xl border-2 ${borderColor} bg-white px-4 py-3 pr-10 text-sm focus:border-blue-600 focus:outline-none transition-colors`}
+          required
+        />
+        {status !== 'empty' && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            {status === 'valid' ? (
+              <CheckCircle2 className={`w-5 h-5 ${iconColor}`} />
+            ) : (
+              <XCircle className={`w-5 h-5 ${iconColor}`} />
+            )}
+          </div>
+        )}
+      </div>
+      {status === 'invalid' && (
+        <p className="mt-1 text-xs text-red-600 font-medium">CPF inválido</p>
+      )}
     </label>
   );
 }

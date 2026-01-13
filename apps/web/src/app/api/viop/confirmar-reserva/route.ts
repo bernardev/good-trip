@@ -118,6 +118,14 @@ export async function POST(req: NextRequest) {
 
     console.log('📝 Iniciando emissão de bilhete:', { orderId, status });
 
+    // 🔥 NOVO: Verificar se já foi emitido (CACHE)
+    const bilheteCache = await kv.get(`bilhete:${orderId}`);
+    if (bilheteCache) {
+      console.log('✅ Bilhete já emitido anteriormente (cache), retornando...');
+      const cached = typeof bilheteCache === 'string' ? JSON.parse(bilheteCache) : bilheteCache;
+      return NextResponse.json(cached);
+    }
+
     if (status !== 'paid' && status !== 'approved') {
       return NextResponse.json(
         { error: 'Pagamento não aprovado', status: 'NEGADO' },
@@ -232,7 +240,8 @@ export async function POST(req: NextRequest) {
     // 🔥 Calcular valor total correto (preco já é total)
     const valorTotal = reservaData.preco;
 
-    return NextResponse.json({
+    // 🔥 NOVO: Montar resposta como objeto para salvar no cache
+    const responseData = {
       localizador: primeiroBilhete.localizador,
       status: 'CONFIRMADO',
       numeroBilhete: primeiroBilhete.numeroBilhete,
@@ -277,7 +286,13 @@ export async function POST(req: NextRequest) {
       dataHoraEmbarqueInicio: primeiroBilhete.bpe?.dataHoraEmbarqueInicio,
       dataHoraEmbarqueFim: primeiroBilhete.bpe?.dataHoraEmbarqueFim,
       _teste: false,
-    });
+    };
+
+    // 🔥 NOVO: Salvar no cache (30 dias = 2592000 segundos)
+    await kv.set(`bilhete:${orderId}`, responseData, { ex: 2592000 });
+    console.log('💾 Bilhete salvo no cache para futuras consultas');
+
+    return NextResponse.json(responseData);
 
   } catch (error) {
     const mensagemErro = error instanceof Error ? error.message : 'Erro desconhecido';
@@ -361,7 +376,7 @@ async function confirmarVenda(
   const payload = {
     transacao: bloqueioResponse.transacao,
     nomePassageiro: passageiro.nomeCompleto,
-    documentoPassageiro: passageiro.docNumero, // 🔥 CORRIGIDO: era .documento
+    documentoPassageiro: passageiro.docNumero,
     tipoDocumentoPassageiro: "CPF",
     email: passageiro.email || 'naotemmail@goodtrip.com.br',
     telefone: passageiro.telefone.replace(/\D/g, ''),

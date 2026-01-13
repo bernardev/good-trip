@@ -24,15 +24,13 @@ type BilheteData = {
   outros: number;
 };
 
-/**
- * Gera PDF do bilhete e retorna como Buffer
- */
 export async function gerarBilhetePDF(dados: BilheteData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ 
         size: 'A4',
-        margin: 40
+        margin: 40,
+        bufferPages: true
       });
 
       const buffers: Buffer[] = [];
@@ -50,7 +48,7 @@ export async function gerarBilhetePDF(dados: BilheteData): Promise<Buffer> {
          .text('GOOD TRIP', { align: 'center' });
       
       doc.fontSize(14)
-         .fillColor('#000')
+         .fillColor('#000000')
          .text('Bilhete de Passagem Eletrônico', { align: 'center' });
       
       doc.moveDown();
@@ -65,14 +63,14 @@ export async function gerarBilhetePDF(dados: BilheteData): Promise<Buffer> {
          .text('ROTA', { underline: true });
       
       doc.fontSize(11)
-         .fillColor('#000')
+         .fillColor('#000000')
          .text(`${dados.origemNome} → ${dados.destinoNome}`, { indent: 20 });
       
       doc.moveDown(0.5);
 
       doc.fontSize(10)
          .text(`Data: ${dados.dataFormatada}`, { indent: 20 })
-         .text(`Saída: ${dados.horarioSaida}  |  Chegada: ${dados.horarioChegada}`, { indent: 20 })
+         .text(`Saida: ${dados.horarioSaida}  |  Chegada: ${dados.horarioChegada}`, { indent: 20 })
          .text(`Classe: ${dados.classe}  |  Empresa: ${dados.empresa}`, { indent: 20 });
       
       doc.moveDown();
@@ -83,7 +81,7 @@ export async function gerarBilhetePDF(dados: BilheteData): Promise<Buffer> {
          .text('PASSAGEIRO', { underline: true });
       
       doc.fontSize(11)
-         .fillColor('#000')
+         .fillColor('#000000')
          .text(dados.passageiro.nome, { indent: 20 })
          .fontSize(10)
          .text(`CPF: ${dados.passageiro.documento}`, { indent: 20 });
@@ -96,7 +94,7 @@ export async function gerarBilhetePDF(dados: BilheteData): Promise<Buffer> {
          .text('ASSENTO', { underline: true });
       
       doc.fontSize(16)
-         .fillColor('#000')
+         .fillColor('#000000')
          .text(dados.assento, { indent: 20 });
       
       doc.moveDown();
@@ -107,7 +105,7 @@ export async function gerarBilhetePDF(dados: BilheteData): Promise<Buffer> {
          .text('LOCALIZADOR', { underline: true });
       
       doc.fontSize(14)
-         .fillColor('#000')
+         .fillColor('#000000')
          .text(dados.localizador, { indent: 20 });
       
       doc.moveDown();
@@ -118,9 +116,9 @@ export async function gerarBilhetePDF(dados: BilheteData): Promise<Buffer> {
          .text('VALORES', { underline: true });
       
       doc.fontSize(10)
-         .fillColor('#000')
+         .fillColor('#000000')
          .text(`Tarifa: R$ ${dados.tarifa.toFixed(2)}`, { indent: 20 })
-         .text(`Pedágio: R$ ${dados.pedagio.toFixed(2)}`, { indent: 20 })
+         .text(`Pedagio: R$ ${dados.pedagio.toFixed(2)}`, { indent: 20 })
          .text(`Taxa Embarque: R$ ${dados.taxaEmbarque.toFixed(2)}`, { indent: 20 })
          .text(`Seguro: R$ ${dados.seguro.toFixed(2)}`, { indent: 20 })
          .text(`Outros: R$ ${dados.outros.toFixed(2)}`, { indent: 20 });
@@ -141,11 +139,11 @@ export async function gerarBilhetePDF(dados: BilheteData): Promise<Buffer> {
       doc.moveDown();
       
       doc.fontSize(9)
-         .fillColor('#666')
-         .text('⚠️ IMPORTANTE:', { continued: false })
-         .text('• Chegue com 30 minutos de antecedência', { indent: 10 })
-         .text('• Apresente documento com foto no embarque', { indent: 10 })
-         .text('• Guarde este bilhete até o final da viagem', { indent: 10 });
+         .fillColor('#666666')
+         .text('IMPORTANTE:', { continued: false })
+         .text('- Chegue com 30 minutos de antecedencia', { indent: 10 })
+         .text('- Apresente documento com foto no embarque', { indent: 10 })
+         .text('- Guarde este bilhete ate o final da viagem', { indent: 10 });
       
       doc.moveDown();
       

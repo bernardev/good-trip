@@ -4,6 +4,29 @@ const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'http://31.97.42.88:8
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'teste-eduardo';
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || 'apikey321';
 
+/**
+ * Normaliza telefone brasileiro removendo 9 duplicado
+ */
+function normalizarTelefoneBrasileiro(telefone: string): string {
+  const limpo = telefone.replace(/\D/g, '');
+  
+  // Se começar com 5593 e tiver 99 depois, remove um 9
+  // Ex: 5593991869422 -> 559391869422
+  if (limpo.startsWith('5593') && limpo.charAt(4) === '9' && limpo.charAt(5) === '9') {
+    return limpo.substring(0, 4) + limpo.substring(5); // Remove o 5º caractere (9 duplicado)
+  }
+  
+  // Se não tiver 55 no início, adiciona
+  if (!limpo.startsWith('55')) {
+    return `55${limpo}`;
+  }
+  
+  return limpo;
+}
+
+/**
+ * Envia PDF do bilhete via WhatsApp
+ */
 export async function enviarBilhetePDFWhatsApp(
   telefone: string,
   pdfBuffer: Buffer,
@@ -11,22 +34,18 @@ export async function enviarBilhetePDFWhatsApp(
   caption: string
 ): Promise<boolean> {
   try {
-    // Normalizar telefone
-    const telefoneNumeros = telefone.replace(/\D/g, '');
-    
     console.log('📞 Telefone original:', telefone);
-    console.log('📞 Telefone limpo:', telefoneNumeros);
     
-    if (telefoneNumeros.length < 10 || telefoneNumeros.length > 11) {
-      console.error('❌ Telefone inválido:', telefone);
+    // Normalizar telefone (remove 9 duplicado se necessário)
+    const whatsappNumber = normalizarTelefoneBrasileiro(telefone);
+    
+    console.log('📱 WhatsApp number normalizado:', whatsappNumber);
+    
+    // Validar tamanho (deve ter 12 ou 13 dígitos: 55 + DDD + número)
+    if (whatsappNumber.length < 12 || whatsappNumber.length > 13) {
+      console.error('❌ Telefone inválido após normalização:', whatsappNumber);
       return false;
     }
-
-    const whatsappNumber = telefoneNumeros.startsWith('55') 
-      ? telefoneNumeros 
-      : `55${telefoneNumeros}`;
-
-    console.log('📱 WhatsApp number:', whatsappNumber);
 
     // Converter PDF para base64
     const pdfBase64 = pdfBuffer.toString('base64');

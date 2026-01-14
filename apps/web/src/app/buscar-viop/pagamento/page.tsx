@@ -44,8 +44,16 @@ type Passageiro = {
   email: string;
 };
 
-// 🔥 CUPONS VÁLIDOS (hard-coded)
-const CUPONS_VALIDOS = ['BEMVINDO10', 'PRIMEIRAVIAGEM', 'DESCONTO10'];
+const CUPONS_10 = Array.from({ length: 20 }, (_, i) => `GOODTRIP10-${String(i + 1).padStart(2, '0')}`);
+const CUPONS_5 = Array.from({ length: 20 }, (_, i) => `GOODTRIP5-${String(i + 1).padStart(2, '0')}`);
+const CUPONS_VALIDOS = [...CUPONS_10, ...CUPONS_5];
+
+// Função para obter porcentagem de desconto
+function getDescontoCupom(cupom: string): number {
+  if (cupom.startsWith('GOODTRIP10')) return 0.10;
+  if (cupom.startsWith('GOODTRIP5')) return 0.05;
+  return 0;
+}
 
 // 🔥 TAXAS DE JUROS
 const TAXAS_JUROS: Record<number, number> = {
@@ -191,8 +199,15 @@ function PagamentoContent() {
   // 🔥 NOVO: Cálculo do desconto
   const valorDesconto = useMemo<number>(() => {
     if (!cupomAplicado) return 0;
-    return subtotal * 0.10; // 10% de desconto
+    const percentualDesconto = getDescontoCupom(cupomAplicado);
+    return subtotal * percentualDesconto;
   }, [cupomAplicado, subtotal]);
+
+  // Percentual de desconto aplicado
+  const percentualDescontoAplicado = useMemo<number>(() => {
+    if (!cupomAplicado) return 0;
+    return getDescontoCupom(cupomAplicado) * 100;
+  }, [cupomAplicado]);
 
   const totalSemJuros = useMemo<number>(() => {
     return subtotal + taxaServico - valorDesconto;
@@ -767,10 +782,10 @@ function PagamentoContent() {
                   <div className="flex items-center justify-between bg-green-100 border border-green-300 rounded-lg p-3">
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      <div>
-                        <p className="font-bold text-green-900 text-sm">{cupomAplicado}</p>
-                        <p className="text-xs text-green-700">10% de desconto aplicado!</p>
-                      </div>
+                        <div>
+                          <p className="font-bold text-green-900 text-sm">{cupomAplicado}</p>
+                          <p className="text-xs text-green-700">{percentualDescontoAplicado}% de desconto aplicado!</p>
+                        </div>
                     </div>
                     <button
                       type="button"
@@ -796,7 +811,7 @@ function PagamentoContent() {
                 {/* 🔥 NOVO: Mostrar desconto */}
                 {valorDesconto > 0 && (
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-green-600 font-medium">Desconto (10%)</span>
+                    <span className="text-green-600 font-medium">Desconto ({percentualDescontoAplicado}%)</span>
                     <span className="font-medium text-green-600">- R$ {valorDesconto.toFixed(2)}</span>
                   </div>
                 )}

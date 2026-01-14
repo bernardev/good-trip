@@ -2,8 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { kv } from '@vercel/kv';
 import { estornarAutomatico } from '@/lib/estorno';
-import { gerarBilhetePDF } from '@/lib/bilhete-pdf';
-import { enviarBilhetePDFWhatsApp } from '@/lib/evolution-whatsapp';
+import { enviarBilheteLinkWhatsApp } from '@/lib/evolution-whatsapp';
 import { notificarAdmin } from '@/lib/notificacoes-admin';
 
 const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
@@ -312,54 +311,23 @@ export async function POST(req: NextRequest) {
     if (primeiroPassageiro?.telefone) {
       (async () => {
         try {
-          for (let i = 0; i < bilhetesEmitidos.length; i++) {
-            const bilhete = bilhetesEmitidos[i];
-            const passageiro = reservaData.passageiros[i] || primeiroPassageiro;
-            
-            const pdfBuffer = await gerarBilhetePDF({
-              localizador: bilhete.localizador,
-              numeroBilhete: bilhete.numeroBilhete,
-              passageiro: {
-                nome: passageiro.nomeCompleto,
-                documento: passageiro.docNumero
-              },
-              origemNome: responseData.origemNome || 'Origem',
-              destinoNome: responseData.destinoNome || 'Destino',
-              dataFormatada: responseData.dataFormatada || '',
-              horarioSaida: responseData.horarioSaida || '',
-              horarioChegada: responseData.horarioChegada || '',
-              assento: bilhete.poltrona,
-              classe: responseData.classe || 'CONVENCIONAL',
-              empresa: responseData.empresa || '',
-              total: responseData.total / bilhetesEmitidos.length,
-              tarifa: responseData.tarifa || 0,
-              pedagio: responseData.pedagio || 0,
-              taxaEmbarque: responseData.taxaEmbarque || 0,
-              seguro: responseData.seguro || 0,
-              outros: responseData.outros || 0
-            });
-
-            const nomeArquivo = `Bilhete-GoodTrip-${bilhete.localizador}.pdf`;
-            const caption = `🎫 Seu bilhete Good Trip\n\n` +
-                          `✈️ ${responseData.origemNome} → ${responseData.destinoNome}\n` +
-                          `📅 ${responseData.dataFormatada}\n` +
-                          `💺 Assento ${bilhete.poltrona}\n` +
-                          `🔢 Localizador: ${bilhete.localizador}\n\n` +
-                          `Boa viagem! 🚌`;
-
-            await enviarBilhetePDFWhatsApp(
-              passageiro.telefone,
-              pdfBuffer,
-              nomeArquivo,
-              caption
-            );
-          }
+          await enviarBilheteLinkWhatsApp(
+            primeiroPassageiro.telefone,
+            orderId,
+            {
+              origem: responseData.origemNome || 'Origem',
+              destino: responseData.destinoNome || 'Destino',
+              data: responseData.dataFormatada || '',
+              assentos: responseData.assentos,
+              localizadores: responseData.localizadores
+            }
+          );
         } catch (error) {
-          console.error('⚠️ Erro ao enviar PDF via WhatsApp (não crítico):', error);
+          console.error('⚠️ Erro ao enviar link via WhatsApp (não crítico):', error);
         }
       })();
       
-      console.log('📱 Enviando bilhetes em PDF via WhatsApp...');
+      console.log('📱 Enviando link do bilhete via WhatsApp...');
     }
 
     // 🔥 Notificar admin sobre bilhete emitido com sucesso

@@ -42,12 +42,9 @@ type Meta = {
 
 type Props = { query: Query; meta?: Meta };
 
-type DocTipo = "CPF" | "RG" | "Passaporte";
-
 type PassageiroForm = {
   assento: string;
   nomeCompleto: string;
-  docTipo: DocTipo;
   docNumero: string;
   nacionalidade: string;
   telefone: string;
@@ -148,17 +145,16 @@ export default function IdentificacaoClient({ query, meta }: Props) {
   const ss = secsLeft % 60;
 
   // Estado para múltiplos passageiros
-  const [passageiros, setPassageiros] = useState<PassageiroForm[]>(
-    query.assentos.map(assento => ({
-      assento,
-      nomeCompleto: "",
-      docTipo: "CPF" as DocTipo,
-      docNumero: "",
-      nacionalidade: "Brasil",
-      telefone: "",
-      email: "",
-    }))
-  );
+const [passageiros, setPassageiros] = useState<PassageiroForm[]>(
+  query.assentos.map(assento => ({
+    assento,
+    nomeCompleto: "",
+    docNumero: "",
+    nacionalidade: "Brasil",
+    telefone: "",
+    email: "",
+  }))
+);
 
   const [terms, setTerms] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -172,7 +168,7 @@ export default function IdentificacaoClient({ query, meta }: Props) {
   }, [meta?.preco, query.assentos]);
 
   // Atualizar dados de um passageiro específico
-  function setPassageiro(index: number, key: keyof PassageiroForm, val: string | DocTipo) {
+  function setPassageiro(index: number, key: keyof PassageiroForm, val: string) {
     setPassageiros(prev => prev.map((p, i) => 
       i === index ? {...p, [key]: val} : p
     ));
@@ -181,7 +177,6 @@ export default function IdentificacaoClient({ query, meta }: Props) {
   // 🔥 NOVO: Validar CPF de um passageiro específico
   function getCPFStatus(index: number): 'valid' | 'invalid' | 'empty' {
     const p = passageiros[index];
-    if (p.docTipo !== 'CPF') return 'empty';
     if (!p.docNumero.trim()) return 'empty';
     return validateCPF(p.docNumero) ? 'valid' : 'invalid';
   }
@@ -196,14 +191,12 @@ export default function IdentificacaoClient({ query, meta }: Props) {
         return `Passageiro ${i+1} (Assento ${p.assento}): Informe o documento.`;
       
       // 🔥 Validação específica de CPF
-      if (p.docTipo === 'CPF') {
-        const cpfClean = sanitizeCPF(p.docNumero);
-        if (cpfClean.length !== 11) {
-          return `Passageiro ${i+1} (Assento ${p.assento}): CPF deve ter 11 dígitos.`;
-        }
-        if (!validateCPF(p.docNumero)) {
-          return `Passageiro ${i+1} (Assento ${p.assento}): CPF inválido.`;
-        }
+      const cpfClean = sanitizeCPF(p.docNumero);
+      if (cpfClean.length !== 11) {
+        return `Passageiro ${i+1} (Assento ${p.assento}): CPF deve ter 11 dígitos.`;
+      }
+      if (!validateCPF(p.docNumero)) {
+        return `Passageiro ${i+1} (Assento ${p.assento}): CPF inválido.`;
       }
       
       if (!p.telefone.trim()) 
@@ -229,11 +222,12 @@ export default function IdentificacaoClient({ query, meta }: Props) {
 
     try {
       // 🔥 Sanitizar CPF antes de enviar
-      const passageirosSanitizados = passageiros.map(p => ({
-        ...p,
-        docNumero: p.docTipo === 'CPF' ? sanitizeCPF(p.docNumero) : p.docNumero,
-        telefone: p.telefone.replace(/\D/g, ''), // Remove formatação do telefone também
-      }));
+    const passageirosSanitizados = passageiros.map(p => ({
+      ...p,
+      docTipo: 'CPF', // Sempre CPF
+      docNumero: sanitizeCPF(p.docNumero),
+      telefone: p.telefone.replace(/\D/g, ''),
+    }));
 
       const params = new URLSearchParams({
         servico: query.servico,
@@ -308,39 +302,16 @@ export default function IdentificacaoClient({ query, meta }: Props) {
         />
       </div>
 
-      {/* Documentos - Grid 2 colunas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Select
-          label="Tipo*"
+      {/* CPF */}
+      <div>
+        <CPFField
+          label="CPF*"
           icon={<Hash className="w-4 h-4" />}
-          value={passageiro.docTipo}
-          onChange={(v) => setPassageiro(index, "docTipo", v as DocTipo)}
-          options={[
-            { label: "CPF", value: "CPF" },
-            { label: "RG", value: "RG" },
-            { label: "Passaporte", value: "Passaporte" },
-          ]}
+          value={passageiro.docNumero}
+          onChange={(v) => setPassageiro(index, "docNumero", maskCPF(v))}
+          status={getCPFStatus(index)}
         />
-        
-        {/* 🔥 Campo CPF com validação visual */}
-        {passageiro.docTipo === 'CPF' ? (
-          <CPFField
-            label="CPF*"
-            icon={<Hash className="w-4 h-4" />}
-            value={passageiro.docNumero}
-            onChange={(v) => setPassageiro(index, "docNumero", maskCPF(v))}
-            status={getCPFStatus(index)}
-          />
-        ) : (
-          <Field
-            label="Nº Documento*"
-            icon={<Hash className="w-4 h-4" />}
-            value={passageiro.docNumero}
-            onChange={(v) => setPassageiro(index, "docNumero", v)}
-          />
-        )}
       </div>
-
       {/* Contato - Grid 2 colunas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field

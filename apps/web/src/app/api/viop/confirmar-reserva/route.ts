@@ -100,6 +100,8 @@ type ConfirmacaoResponse = {
   documento: string;
   bpe?: BPEData;
   cupomTaxaEmbarque?: string;
+  orgaoConcedenteId?: number;
+  customizacaoRodapeCupomDeEmbarque?: string;
 };
 
 type RequestBody = {
@@ -299,6 +301,8 @@ export async function POST(req: NextRequest) {
       cabecalhoEmitente: primeiroBilhete.bpe?.cabecalhoEmitente,
       dataHoraEmbarqueInicio: primeiroBilhete.bpe?.dataHoraEmbarqueInicio,
       dataHoraEmbarqueFim: primeiroBilhete.bpe?.dataHoraEmbarqueFim,
+      orgaoConcedenteId: primeiroBilhete.orgaoConcedenteId,
+      customizacaoRodapeCupomDeEmbarque: primeiroBilhete.customizacaoRodapeCupomDeEmbarque,
       _teste: false,
     };
 

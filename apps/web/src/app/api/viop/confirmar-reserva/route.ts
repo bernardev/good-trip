@@ -281,6 +281,17 @@ export async function POST(req: NextRequest) {
         documento: primeiroBilhete.documento,
         email: reservaData.passageiros[0]?.email || '',
       },
+      // 🔥 NOVO: Array completo de passageiros para os bilhetes
+      passageiros: reservaData.passageiros,
+      // 🔥 NOVO: Dados específicos de cada bilhete emitido
+      bilhetes: bilhetesEmitidos.map((bilhete, idx) => ({
+        assento: bilhetesEmitidos[idx].poltrona,
+        localizador: bilhete.localizador,
+        numeroBilhete: bilhete.numeroBilhete,
+        passageiro: reservaData.passageiros.find(
+          p => p.assento === bilhetesEmitidos[idx].poltrona
+        ) || reservaData.passageiros[idx]
+      })),
       chaveBpe: primeiroBilhete.bpe?.chaveBpe,
       qrCode: primeiroBilhete.bpe?.codigoMonitriipBPe,
       qrCodeBpe: primeiroBilhete.bpe?.qrcodeBpe,

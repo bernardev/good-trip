@@ -34,6 +34,31 @@ type ReservaResult = {
     email: string;
     documento?: string;
   };
+  // 🔥 NOVO: Array completo de passageiros
+  passageiros?: Array<{
+    assento: string;
+    nomeCompleto: string;
+    docNumero: string;
+    docTipo: string;
+    nacionalidade: string;
+    telefone: string;
+    email?: string;
+  }>;
+  // 🔥 NOVO: Dados específicos de cada bilhete
+  bilhetes?: Array<{
+    assento: string;
+    localizador: string;
+    numeroBilhete: string;
+    passageiro: {
+      assento: string;
+      nomeCompleto: string;
+      docNumero: string;
+      docTipo: string;
+      nacionalidade: string;
+      telefone: string;
+      email?: string;
+    };
+  }>;
   qrCode?: string;
   qrCodeBpe?: string;
   qrCodeTaxaEmbarque?: string;
@@ -201,6 +226,20 @@ function ConfirmacaoContent() {
 
         {assentos.map((assento, index) => {
           const localizadorAtual = localizadores[index] || reserva?.localizador || '';
+          
+          // 🔥 NOVO: Buscar passageiro correto para este bilhete com tipagem forte
+          const passageiroAtual = reserva?.bilhetes?.[index]?.passageiro || 
+                                  reserva?.passageiros?.find(p => p.assento === assento) ||
+                                  reserva?.passageiro;
+          
+          // 🔥 Type guard com verificação de undefined
+          const nomePassageiro = passageiroAtual && 'nomeCompleto' in passageiroAtual
+            ? passageiroAtual.nomeCompleto 
+            : passageiroAtual?.nome || '';
+          
+          const docPassageiro = passageiroAtual && 'docNumero' in passageiroAtual
+            ? passageiroAtual.docNumero 
+            : passageiroAtual?.documento || '';
 
           return (
             <div key={index} className="bilhete-print">
@@ -365,8 +404,8 @@ function ConfirmacaoContent() {
                           )}
                         </div>
                         <div style={{ fontSize: '8px', lineHeight: 1.1 }}>
-                          <p>Passageiro: {reserva?.passageiro?.nome}</p>
-                          <p>Doc: {reserva?.passageiro?.documento}</p>
+                          <p>Passageiro: {nomePassageiro}</p>
+                          <p>Doc: {docPassageiro}</p>
                           <p>Tipo de Desconto: Tarifa promocional</p>
                           <p>Bp-e nº: {reserva?.numeroBPe} Série: {reserva?.serie} | Tipo BP-e: 0</p>
                           <p>Protocolo de Autorização: {reserva?.protocolo}</p>
@@ -526,9 +565,11 @@ function ConfirmacaoContent() {
 
                         <div style={{ marginBottom: '2px' }}>
                           <span className="font-bold" style={{ fontSize: '8px' }}>Nome</span>
-                          <div className="font-bold" style={{ fontSize: '8px' }}>{reserva?.passageiro?.nome?.toUpperCase()}</div>
+                          {/* 🔥 CORRIGIDO: Usa passageiro correto deste bilhete */}
+                          <div className="font-bold" style={{ fontSize: '8px' }}>{nomePassageiro?.toUpperCase()}</div>
                           <span className="font-bold" style={{ fontSize: '8px' }}>Documento</span>
-                          <div className="font-bold" style={{ fontSize: '8px' }}>{reserva?.passageiro?.documento}</div>
+                          {/* 🔥 CORRIGIDO: Usa documento correto deste bilhete */}
+                          <div className="font-bold" style={{ fontSize: '8px' }}>{docPassageiro}</div>
                         </div>
 
                         <div className="flex justify-between items-start">

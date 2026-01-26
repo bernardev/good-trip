@@ -424,68 +424,33 @@ function ConfirmacaoContent() {
                   {/* ========== COLUNA 2 (34%) ========== */}
                   <div className="flex flex-col" style={{ width: '34%', padding: '10px 12px', borderRight: '1px dashed #ccc' }}>
                     
-                    {/* 🔥 NOVO: Usar HTML da API se disponível */}
-                    {reserva?.customizacaoRodapeCupomDeEmbarque ? (
+                    {/* 🔥 USAR HTML DA API (customizacaoRodapeCupomDeEmbarque) */}
+                    {reserva?.customizacaoRodapeCupomDeEmbarque && reserva.customizacaoRodapeCupomDeEmbarque.trim() !== '' ? (
+                      // HTML personalizado retornado pela API (já vem com regras corretas)
                       <div 
                         dangerouslySetInnerHTML={{ __html: reserva.customizacaoRodapeCupomDeEmbarque }}
-                        style={{ fontSize: '11px', textAlign: 'justify', lineHeight: 1.2, height: '555px' }}
+                        style={{ fontSize: '11px', textAlign: 'justify', lineHeight: 1.2 }}
                       />
                     ) : (
-                      <div style={{ fontSize: '11px', textAlign: 'justify', lineHeight: 1.2, height: '555px' }}>
+                      // Fallback genérico (caso API não retorne nada)
+                      <div style={{ fontSize: '11px', textAlign: 'justify', lineHeight: 1.2 }}>
                         <p style={{ marginBottom: '6px' }}>
                           Os direitos e deveres dos passageiros podem ser consultados através do Guia de Orientação aos Passageiros, disponíveis no formato digital nos guichês, ônibus e site da empresa.
                         </p>
-
-                        <p className="font-bold" style={{ marginTop: '8px', textTransform: 'uppercase' }}>
-                          REGRAS PARA TRANSFERÊNCIA E REMARCAÇÃO:
-                        </p>
-
-                        <p style={{ marginBottom: '6px' }}>
-                          <strong>Cancelamento e Reembolso:</strong> O passageiro pode solicitar cancelamento e reembolso até 3 horas antes da viagem. <strong>Não Comparecimento:</strong> Se o passageiro não comparecer e não cancelar até 3 horas antes da viagem, perderá o direito ao reembolso.
-                        </p>
-
-                        <p style={{ marginBottom: '6px' }}>
-                          <strong>Devolução do Valor:</strong> A empresa devolve o valor pago em até 30 dias após o pedido, com retenção de 5% como multa.
-                        </p>
-
-                        <p style={{ marginBottom: '6px' }}>
-                          <strong>Reembolso Integral:</strong> Passageiros que comprarem bilhetes online têm direito a reembolso integral se solicitarem cancelamento em até 7 dias após a compra, desde que a viagem não comece em menos de 3 horas.
-                        </p>
-
-                        <p style={{ marginBottom: '6px' }}>
-                          <strong>Taxa de Remarcação:</strong> Se a remarcação for feita após 3 horas antes da viagem, será cobrada uma taxa de 20% do valor pago.
-                        </p>
-
-                        <p style={{ marginBottom: '6px' }}>
-                          <strong>Diferença de Valor:</strong> Em caso de remarcação, o passageiro paga ou recebe a diferença entre o valor pago e o novo valor.
-                        </p>
-
-                        <p style={{ marginBottom: '6px' }}>
-                          <strong>Remarcação Após 3 Horas:</strong> Após 3 horas antes da viagem, a passagem só pode ser remarcada para a mesma origem e destino.
-                        </p>
-
-                        <p style={{ marginBottom: '6px' }}>
-                          <strong>Troca de Trecho:</strong> A troca de trecho requer antecedência mínima de 3 horas antes da viagem, e nenhuma remarcação fora do prazo de 3 horas.
-                        </p>
-
-                        <p style={{ marginBottom: '6px' }}>
-                          <strong>Transferibilidade:</strong> Bilhetes são nominais e podem ser transferíveis, salvo disposição contrária.
-                        </p>
-
-                        <p style={{ marginBottom: '6px' }}>
-                          <strong>Gratuidades e Descontos:</strong> Bilhetes emitidos com gratuidades e descontos legais são intransferíveis.
+                        <p className="font-bold" style={{ marginTop: '8px' }}>
+                          Consulte as regras de cancelamento e remarcação com a empresa.
                         </p>
                       </div>
                     )}
 
-                    {/* 🔥 QR Code do Guia - SÓ MOSTRA SE FOR ANTT (ID 3) */}
+                    {/* 🔥 QR Code do Guia - APENAS para ANTT (ID 3) */}
                     {reserva?.orgaoConcedenteId === 3 && (
-                      <div className="flex flex-col items-center mt-auto pt-2" style={{ gap: '0.2rem' }}>
+                      <div className="flex flex-col items-center mt-4 pt-4 border-t border-gray-200" style={{ gap: '0.5rem' }}>
                         <p className="text-center font-semibold" style={{ fontSize: '12px' }}>
                           Para ler o guia do passageiro<br />completo acesse pelo QRCode abaixo
                         </p>
                         <QRCodeSVG value="https://www.viacaoouroepratacom.br/guia-passageiros" size={90} level="M" />
-                        <a href="https://www.viacaoouroepratacom.br/guia-passageiros" style={{ fontSize: '8px', marginTop: '10px', color: '#000', textDecoration: 'none' }}>
+                        <a href="https://www.viacaoouroepratacom.br/guia-passageiros" style={{ fontSize: '8px', marginTop: '5px', color: '#000', textDecoration: 'none' }}>
                           www.viacaoouroepratacom.br/guia-passageiros
                         </a>
                       </div>

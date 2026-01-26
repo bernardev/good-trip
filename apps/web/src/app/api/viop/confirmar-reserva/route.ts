@@ -104,6 +104,15 @@ type ConfirmacaoResponse = {
   customizacaoRodapeCupomDeEmbarque?: string;
 };
 
+// 🔥 NOVO: Tipo para resposta de categorias
+type CategoriaResponse = {
+  orgaoConcedenteId?: number;
+  orgaoConcedente?: {
+    id: number;
+    nome: string;
+  };
+};
+
 type RequestBody = {
   orderId: string;
   status: string;
@@ -150,6 +159,18 @@ export async function POST(req: NextRequest) {
     console.log(`🎫 Processando ${reservaData.assentos.length} assento(s)...`);
     
     let primeiroBloqueioDados: BloqueioResponse | null = null;
+    let orgaoConcedenteIdViagem: number | undefined;
+    
+    // 🔥 NOVO: Buscar orgaoConcedenteId das categorias ANTES de processar
+    try {
+      console.log('🔍 Consultando categorias para obter orgaoConcedenteId...');
+      const categorias = await consultarCategorias(reservaData);
+      orgaoConcedenteIdViagem = categorias.orgaoConcedenteId;
+      console.log(`✅ orgaoConcedenteId obtido: ${orgaoConcedenteIdViagem || 'não informado pela API'}`);
+    } catch (error) {
+      console.warn('⚠️ Não foi possível obter orgaoConcedenteId das categorias:', error);
+      // Continua sem o ID, não é crítico para emissão
+    }
 
     for (let i = 0; i < reservaData.assentos.length; i++) {
       const assento = reservaData.assentos[i];
@@ -312,7 +333,8 @@ export async function POST(req: NextRequest) {
       cabecalhoEmitente: primeiroBilhete.bpe?.cabecalhoEmitente,
       dataHoraEmbarqueInicio: primeiroBilhete.bpe?.dataHoraEmbarqueInicio,
       dataHoraEmbarqueFim: primeiroBilhete.bpe?.dataHoraEmbarqueFim,
-      orgaoConcedenteId: primeiroBilhete.orgaoConcedenteId,
+      // 🔥 PRIORIDADE: orgaoConcedenteId das categorias > confirmarVenda
+      orgaoConcedenteId: orgaoConcedenteIdViagem || primeiroBilhete.orgaoConcedenteId,
       customizacaoRodapeCupomDeEmbarque: primeiroBilhete.customizacaoRodapeCupomDeEmbarque,
       _teste: false,
     };
@@ -401,6 +423,42 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// 🔥 NOVA FUNÇÃO: Consultar categorias para obter orgaoConcedenteId
+async function consultarCategorias(reserva: ReservaData): Promise<CategoriaResponse> {
+  const url = `${VIOP_BASE}/categoria/consultarCategoriasCorrida`;
+  
+  const payload = {
+    origem: parseInt(reserva.origem),
+    destino: parseInt(reserva.destino),
+    data: reserva.data,
+    servico: parseInt(reserva.servico),
+  };
+
+  console.log('📤 Consultando categorias:', payload);
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-tenant-id': TENANT,
+      'authorization': AUTH,
+      'user-agent': 'PostmanRuntime/7.49.1',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.error('❌ Erro ao consultar categorias:', res.status, text);
+    throw new Error(`Erro ao consultar categorias: ${res.status}`);
+  }
+
+  const response: unknown = await res.json();
+  console.log('✅ Resposta consultarCategorias:', response);
+  
+  return response as CategoriaResponse;
 }
 
 async function bloquearPoltronaIndividual(reserva: ReservaData, assento: string): Promise<BloqueioResponse> {

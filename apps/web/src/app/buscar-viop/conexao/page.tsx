@@ -1,7 +1,7 @@
 // apps/web/src/app/buscar-viop/conexao/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { Bus, AlertCircle, RefreshCw, ChevronDown, ChevronUp, Loader2, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -74,7 +74,7 @@ function seatIsFree(p: {
   return ['LIVRE', 'DISPONIVEL', 'AVAILABLE', 'FREE', 'TRUE', 'SIM', '1'].includes(v);
 }
 
-export default function ConexaoPage() {
+function ConexaoPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -88,7 +88,6 @@ export default function ConexaoPage() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Buscar dados da conexão
   useEffect(() => {
     if (!servico || !origem || !destino || !data) {
       setErro('Parâmetros incompletos');
@@ -116,7 +115,6 @@ export default function ConexaoPage() {
 
       setConexao(json.conexao);
       
-      // Inicializar trechos com estado
       setTrechos(json.conexao.trechos.map((t: ConexaoTrecho) => ({
         ...t,
         expandido: false,
@@ -136,7 +134,6 @@ export default function ConexaoPage() {
   const toggleTrecho = async (index: number) => {
     const trecho = trechos[index];
     
-    // Se já está expandido, apenas colapsa
     if (trecho.expandido) {
       setTrechos(prev => {
         const updated = [...prev];
@@ -146,7 +143,6 @@ export default function ConexaoPage() {
       return;
     }
 
-    // Se não tem assentos carregados, busca
     if (trecho.poltronas.length === 0) {
       setTrechos(prev => {
         const updated = [...prev];
@@ -202,7 +198,6 @@ export default function ConexaoPage() {
         });
       }
     } else {
-      // Já tem assentos, apenas expande
       setTrechos(prev => {
         const updated = [...prev];
         updated[index] = { ...updated[index], expandido: true };
@@ -216,7 +211,6 @@ export default function ConexaoPage() {
       const updated = [...prev];
       const trecho = updated[trechoIndex];
       
-      // Toggle
       if (trecho.assentoSelecionado === numeroAssento) {
         updated[trechoIndex] = { ...trecho, assentoSelecionado: null };
       } else {
@@ -244,7 +238,6 @@ export default function ConexaoPage() {
                             trechos[0].assentoSelecionado !== null && 
                             trechos[1].assentoSelecionado !== null;
 
-  // Loading inicial
   if (loading) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center p-4">
@@ -256,7 +249,6 @@ export default function ConexaoPage() {
     );
   }
 
-  // Erro
   if (erro || !conexao) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center p-4">
@@ -418,7 +410,7 @@ export default function ConexaoPage() {
                         </div>
                       </div>
 
-                      {/* Grid de Assentos com Layout de Ônibus */}
+                      {/* Grid de Assentos */}
                       <SeatGrid
                         poltronas={trecho.poltronas}
                         assentoSelecionado={trecho.assentoSelecionado}
@@ -461,5 +453,20 @@ export default function ConexaoPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function ConexaoPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-slate-600">Carregando...</p>
+        </div>
+      </main>
+    }>
+      <ConexaoPageContent />
+    </Suspense>
   );
 }

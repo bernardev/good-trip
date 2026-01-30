@@ -5,6 +5,7 @@ import {
   ViopCitiesResponse,
   ViopTrip,
 } from '../types/unified-trip';
+import { ConexaoData, normalizarConexao } from '../lib/viop-types-conexoes';
 
 /** -------- Tipos da resposta de /api/viop/corridas -------- */
 interface ViopCorridaSimples {
@@ -20,6 +21,7 @@ interface ViopCorridaSimples {
   tipo: string;
   nomeEmpresa: string;
   servico?: string;       // opcional; quando presente, é o ID do serviço
+  conexao?: ConexaoData;  // 🔥 NOVO: dados de conexão
 }
 
 interface ViopCorridasResponse {
@@ -111,8 +113,14 @@ export class ViopAdapter {
         return [];
       }
 
-      // 2) Para cada corrida, buscar detalhes (onibus) pelo serviço
+      // 2) Para cada corrida, processar
       const tripsPromises = lista.map(async (corrida) => {
+        // Detectar se é conexão
+        if (corrida.conexao) {
+          return this.processarConexao(corrida, params);
+        }
+
+        // Viagem normal (sem conexão)
         const servicoId = corrida.servico || this.extractServicoFromCorridaId(corrida.id) || corrida.id;
 
         const onibusUrl =
@@ -166,6 +174,83 @@ export class ViopAdapter {
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';
       console.error('❌ [VIOP] Erro:', msg);
       return [];
+    }
+  }
+
+  /**
+   * Processa viagem com CONEXÃO
+   */
+  private processarConexao(
+    corrida: ViopCorridaSimples,
+    params: {
+      departureCity: string;
+      arrivalCity: string;
+      departureDate: string;
+    }
+  ): UnifiedTrip | null {
+    if (!corrida.conexao) return null;
+
+    try {
+      // Normalizar dados da conexão
+      const conexaoNorm = normalizarConexao(corrida.conexao);
+
+      const origemNome = conexaoNorm.trechos[0].origemDescricao;
+      const destinoNome = conexaoNorm.trechos[1].destinoDescricao;
+
+      // Horários
+      const horaSaida = conexaoNorm.trechos[0].horaSaida;
+      const horaChegada = conexaoNorm.trechos[1].horaChegada;
+
+      const departureTime = this.combineDateTime(params.departureDate, horaSaida);
+      const arrivalTime = this.combineDateTime(params.departureDate, horaChegada);
+
+      // ViopTrip para compatibilidade
+      const viopTrip: ViopTrip = {
+        id: corrida.id,
+        origem: origemNome,
+        destino: destinoNome,
+        dataHoraSaida: departureTime,
+        dataHoraChegada: arrivalTime,
+        duracao: conexaoNorm.duracaoTotal,
+        empresa: conexaoNorm.trechos[0].empresa, // empresa do primeiro trecho
+        valor: conexaoNorm.precoTotal,
+        poltronasDisponiveis: conexaoNorm.assentosDisponiveis,
+        tipoOnibus: 'Conexão',
+        servicos: [],
+      };
+
+      // URL para página de detalhes da conexão
+      const bookingParams = new URLSearchParams({
+        servico: corrida.id,  // ✅
+        origem: params.departureCity,
+        destino: params.arrivalCity,
+        data: params.departureDate,
+      });
+
+      return {
+        id: `viop-conexao-${corrida.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        provider: 'viop',
+        departureCity: origemNome,
+        departureCityCode: params.departureCity,
+        arrivalCity: destinoNome,
+        arrivalCityCode: params.arrivalCity,
+        departureTime,
+        arrivalTime,
+        duration: conexaoNorm.duracaoTotal,
+        carrier: `${conexaoNorm.trechos[0].empresa} / ${conexaoNorm.trechos[1].empresa}`,
+        carrierLogo: '/logos/viop-logo.png',
+        price: conexaoNorm.precoTotal,
+        currency: 'BRL',
+        availableSeats: conexaoNorm.assentosDisponiveis,
+        busType: 'Conexão',
+        amenities: [],
+        bookingUrl: `/buscar-viop/conexao?${bookingParams.toString()}`,
+        conexao: conexaoNorm, // 🔥 Adiciona dados da conexão
+        rawData: viopTrip,
+      };
+    } catch (error) {
+      console.error(`❌ [VIOP] Erro ao processar conexão ${corrida.id}:`, error);
+      return null;
     }
   }
 

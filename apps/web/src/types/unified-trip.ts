@@ -1,5 +1,7 @@
 // Tipos unificados para viagens de diferentes provedores
 
+import type { ConexaoNormalizada } from '../lib/viop-types-conexoes';
+
 // ======================= Utilitários =======================
 export type Empty = Record<string, never>;
 
@@ -52,6 +54,9 @@ export interface UnifiedTrip {
   // Link de reserva
   bookingUrl: string;
 
+  // 🔥 NOVO: Dados de conexão (se for viagem com baldeação)
+  conexao?: ConexaoNormalizada;
+
   // Dados originais (preservar para debugging)
   rawData: DistribusionConnection | ViopTrip;
 }
@@ -91,7 +96,7 @@ export interface DistribusionConnection {
     // duração (em segundos no JSON da Distribusion)
     duration?: number;
 
-    // nomes “legados”
+    // nomes "legados"
     departure_station_name?: string;
     arrival_station_name?: string;
     marketing_carrier_name?: string;

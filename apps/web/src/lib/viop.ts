@@ -4,6 +4,33 @@
 export type Origem = { id: string; nome: string };
 export type Destino = { id: string; nome: string };
 
+// 🔥 NOVO: Tipo de conexão
+export type ConexaoData = {
+  localidadeConexao: string;
+  localidadeConexaoId: number;
+  primeiroTrechoServico: string;
+  primeiroTrechoOrigem: number;
+  primeiroTrechoOrigemDescricao: string;
+  primeiroTrechoDestino: number;
+  primeiroTrechoDestinoDescricao: string;
+  primeiroTrechoHoraSaida: string;
+  primeiroTrechoHoraChegada: string;
+  primeiroTrechoPreco: string;
+  primeiroTrechoPoltronasLivres: number;
+  primeiroTrechoEmpresa: string;
+  segundoTrechoServico: string;
+  segundoTrechoOrigem: number;
+  segundoTrechoOrigemDescricao: string;
+  segundoTrechoDestino: number;
+  segundoTrechoDestinoDescricao: string;
+  segundoTrechoHoraSaida: string;
+  segundoTrechoHoraChegada: string;
+  segundoTrechoPreco: string;
+  segundoTrechoPoltronasLivres: number;
+  segundoTrechoEmpresa: string;
+  segundoTrechoTempoEspera: number;
+};
+
 export type Corrida = {
   id: string;
   dataPartida: string; // ISO
@@ -11,6 +38,7 @@ export type Corrida = {
   operadora: string;
   duracaoMin: number;
   tarifaDesde: number;
+  conexao?: ConexaoData; // 🔥 NOVO
 };
 
 export type Poltrona = { numero: string; livre: boolean; classe?: string };
@@ -78,6 +106,7 @@ type RjServico = {
   preco?: number;
   valor?: number;
   valorDesde?: number;
+  conexao?: ConexaoData; // 🔥 NOVO
 };
 
 type RjBuscaCorridaRequest = {
@@ -304,6 +333,7 @@ function mapRjServicoToCorrida(x: RjServico): Corrida {
     x.tarifaDesde ?? x.precoDesde ?? x.preco ?? x.valor ?? x.valorDesde ?? 0;
   const tarifaNum =
     typeof tarifaRaw === "number" ? tarifaRaw : Number(String(tarifaRaw));
+  
   return {
     id: String(idCandidate),
     dataPartida: partida ?? new Date().toISOString(),
@@ -311,6 +341,7 @@ function mapRjServicoToCorrida(x: RjServico): Corrida {
     operadora: empresa,
     duracaoMin: duracaoMinCalc,
     tarifaDesde: Number.isFinite(tarifaNum) ? tarifaNum : 0,
+    conexao: x.conexao, // 🔥 ADICIONAR ESTE CAMPO!
   };
 }
 

@@ -105,6 +105,25 @@ function PagamentoContent() {
     preco: sp.get('preco') ?? undefined,
   }), [sp]);
 
+  // 🔥 NOVO: Detectar se é conexão
+  const isConexao = sp.get('conexao') === 'true';
+  const trecho1 = isConexao ? {
+    servico: sp.get('servico1') ?? undefined,
+    origem: sp.get('origem1') ?? undefined,
+    destino: sp.get('destino1') ?? undefined,
+    assento: sp.get('assento1') ?? undefined,
+    origemNome: sp.get('origemNome1') ?? undefined,
+    destinoNome: sp.get('destinoNome1') ?? undefined,
+  } : null;
+  const trecho2 = isConexao ? {
+    servico: sp.get('servico2') ?? undefined,
+    origem: sp.get('origem2') ?? undefined,
+    destino: sp.get('destino2') ?? undefined,
+    assento: sp.get('assento2') ?? undefined,
+    origemNome: sp.get('origemNome2') ?? undefined,
+    destinoNome: sp.get('destinoNome2') ?? undefined,
+  } : null;
+
   const passageiros = useMemo<Passageiro[]>(() => {
     try {
       const parsed = q.passageiros ? JSON.parse(decodeURIComponent(q.passageiros)) : [];
@@ -186,11 +205,17 @@ function PagamentoContent() {
 
   const subtotal = useMemo<number>(() => {
     if (precoReal && precoReal > 0) {
+      // 🔥 Se for conexão, NÃO multiplicar o preço
+      if (isConexao) {
+        return precoReal; // Preço já é o total da viagem
+      }
+      
+      // Viagem normal: multiplicar pelo número de assentos
       const numAssentos = q.assentos ? q.assentos.split(',').filter(Boolean).length : 1;
       return precoReal * numAssentos;
     }
     return 89.70;
-  }, [precoReal, q.assentos]);
+  }, [precoReal, q.assentos, isConexao]);
 
   const taxaServico = useMemo<number>(() => {
     return subtotal * 0.05;
@@ -685,20 +710,70 @@ function PagamentoContent() {
             <div className="rounded-2xl bg-white p-6 shadow-lg border border-slate-200 sticky top-6">
               <h3 className="font-bold text-lg mb-4">Resumo da Compra</h3>
               
-              <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-blue-600 p-2">
-                    <Bus className="w-5 h-5 text-white" />
+              {isConexao && trecho1 && trecho2 ? (
+                // Conexão: Mostrar 2 trechos
+                <>
+                  <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-4 mb-2">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-lg bg-blue-600 p-2">
+                        <Bus className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-blue-600 font-bold mb-1">TRECHO 1</p>
+                        <p className="font-semibold text-slate-900">
+                          {trecho1.origemNome || trecho1.origem} → {trecho1.destinoNome || trecho1.destino}
+                        </p>
+                        <div className="mt-2 space-y-1 text-sm text-slate-600">
+                          <p>📅 {dataFormatada}</p>
+                          <p>💺 Assento: {trecho1.assento}</p>
+                          <p>🎫 Serviço: {trecho1.servico}</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-slate-900">{title}</p>
-                    <div className="mt-2 space-y-1 text-sm text-slate-600">
-                      <p>📅 {dataFormatada}</p>
-                      <p>💺 Assentos: {q.assentos ?? '—'}</p>
-                      <p>🎫 Serviço: {q.servico ?? '—'}</p>
+                  
+                  <div className="rounded-xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-lg bg-orange-600 p-2">
+                        <Bus className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-orange-600 font-bold mb-1">TRECHO 2</p>
+                        <p className="font-semibold text-slate-900">
+                          {trecho2.origemNome || trecho2.origem} → {trecho2.destinoNome || trecho2.destino}
+                        </p>
+                        <div className="mt-2 space-y-1 text-sm text-slate-600">
+                          <p>📅 {dataFormatada}</p>
+                          <p>💺 Assento: {trecho2.assento}</p>
+                          <p>🎫 Serviço: {trecho2.servico}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="px-3 py-2 rounded-lg bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 flex items-center gap-2 mb-4">
+                    <Info className="w-4 h-4 text-orange-600 flex-shrink-0" />
+                    <span className="text-sm font-bold text-orange-900">Viagem com 1 PARADA</span>
+                  </div>
+                </>
+              ) : (
+                // Viagem normal: Mostrar 1 trecho
+                <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-blue-600 p-2">
+                      <Bus className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">{title}</p>
+                      <div className="mt-2 space-y-1 text-sm text-slate-600">
+                        <p>📅 {dataFormatada}</p>
+                        <p>💺 Assentos: {q.assentos ?? '—'}</p>
+                        <p>🎫 Serviço: {q.servico ?? '—'}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
+              )}
               </div>
 
               {observacao && (
@@ -870,7 +945,6 @@ function PagamentoContent() {
             </div>
           </div>
         </div>
-      </div>
     </main>
   );
 }

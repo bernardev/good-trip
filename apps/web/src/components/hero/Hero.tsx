@@ -54,7 +54,7 @@ export default function Hero() {
     }
   }, []);
 
-  /** FIX: no mobile, 1º toque já abre a lista do campo “De” */
+  /** FIX: no mobile, 1º toque já abre a lista do campo "De" */
   useEffect(() => {
     const root = searchWrapRef.current;
     if (!root) return;
@@ -82,10 +82,10 @@ export default function Hero() {
   return (
     <section
       className={[
-        "relative isolate min-h-[82vh] overflow-hidden",
+        "relative isolate min-h-[82vh]",
         hasBg ? "text-white bg-no-repeat bg-cover bg-center" : "text-white bg-gradient-to-br from-navy to-primary",
       ].join(" ")}
-      style={hasBg ? { backgroundImage: `url("${b.bgUrl}")` } : undefined}
+      style={hasBg ? { backgroundImage: `url("${b.bgUrl}")`, zIndex: 50 } : { zIndex: 50 }}
     >
       {/* overlay só com imagem */}
       {hasBg && (
@@ -96,11 +96,13 @@ export default function Hero() {
         />
       )}
 
-      {/* ornaments */}
-      <div className="fx-orb fx-orb--gold w-80 h-80 -left-24 -top-20 animate-[float_10s_ease-in-out_infinite] -z-10" />
-      <div className="fx-orb fx-orb--blue  w-96 h-96 -right-32 -bottom-24 animate-[glow_8s_ease-in-out_infinite] -z-10" />
-      <div ref={stars} className="fx-stars -z-10" />
-      <div className="fx-grain -z-10" />
+      {/* ornaments - agora com clip para não vazar */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="fx-orb fx-orb--gold w-80 h-80 -left-24 -top-20 animate-[float_10s_ease-in-out_infinite]" />
+        <div className="fx-orb fx-orb--blue  w-96 h-96 -right-32 -bottom-24 animate-[glow_8s_ease-in-out_infinite]" />
+        <div ref={stars} className="fx-stars" />
+        <div className="fx-grain" />
+      </div>
 
       {/* conteúdo */}
       <div className="relative z-10 mx-auto max-w-7xl px-4 md:px-8 py-16 md:py-24 grid content-center">
@@ -118,11 +120,12 @@ export default function Hero() {
           {b.subtitle || "Compare horários, preços e rotas. Reserve em poucos cliques."}
         </p>
 
-        {/* Card de busca */}
-        <div className="mt-8 md:mt-12 rounded-2xl gb p-[2px]">
+        {/* Card de busca - com overflow visible para o calendário */}
+        <div className="mt-8 md:mt-12 rounded-2xl gb p-[2px]" style={{ overflow: 'visible' }}>
           <div
             ref={searchWrapRef}
             className="glass rounded-2xl border border-cloud/80 shadow-soft p-4 md:p-6 backdrop-saturate-150 tilt text-ink"
+            style={{ overflow: 'visible' }}
           >
             <HomeSearchWidget />
           </div>

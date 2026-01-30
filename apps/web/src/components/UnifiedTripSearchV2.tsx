@@ -1,29 +1,16 @@
-// apps/web/src/app/components/search/UnifiedTripSearchV2.tsx
+// apps/web/src/components/UnifiedTripSearchV2.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { UnifiedSearchWithAutocomplete } from './UnifiedSearchWithAutocomplete';
+import { SearchBar } from './search/SearchBar';
+import { DaySelector } from './search/DaySelector';
+import { FilterSidebar, applyFilters, type FilterState } from './search/FilterSidebar';
 import { TripCard } from './TripCard';
-import type { UnifiedTrip, UnifiedSearchResult } from '@/types/unified-trip';
-import { SlidersHorizontal, Package, Sparkles, SearchX, Loader2 } from 'lucide-react';
+import type { UnifiedTrip, UnifiedSearchResult, ViopCitiesResponse, ViopCity } from '@/types/unified-trip';
+import { ArrowUpDown, Loader2, SearchX, Sparkles, ChevronRight, Calendar, RefreshCw } from 'lucide-react';
 import { ViopAdapter } from '@/services/viop-adapter';
-
-function converterHorarioParaMinutos(horario: string): number {
-  if (!horario) return 0;
-  const [horas, minutos] = horario.split(':').slice(0, 2).map(Number);
-  if (isNaN(horas) || isNaN(minutos)) return 0;
-  return horas * 60 + minutos;
-}
-
-function ordenarViagensPorHorario(trips: UnifiedTrip[]): UnifiedTrip[] {
-  console.log('🔍 Primeira viagem:', trips[0]); // ADICIONE ESTA LINHA
-  return [...trips].sort((a, b) => {
-    const horarioA = a.departureTime?.split('T')[1] || '';
-    const horarioB = b.departureTime?.split('T')[1] || '';
-    console.log('⏰ Comparando:', horarioA, 'vs', horarioB); // ADICIONE ESTA LINHA
-    return converterHorarioParaMinutos(horarioA) - converterHorarioParaMinutos(horarioB);
-  });
-}
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface AutoSearchParams {
   origem: string;
@@ -38,12 +25,47 @@ interface UnifiedTripSearchV2Props {
   autoSearchParams?: AutoSearchParams;
 }
 
+type SortType = 'price' | 'duration' | 'departure';
+
+function formatViopCity(nome: string): string {
+  const cleaned = nome.trim().toUpperCase();
+  const stateMatch = cleaned.match(/[A-Z]{2}$/);
+  const estado = stateMatch ? stateMatch[0] : '';
+  const cidadeMatch = cleaned.match(/^([^-]+)/);
+  const cidadeRaw = cidadeMatch ? cidadeMatch[1].trim() : cleaned;
+  const cidade = cidadeRaw
+    .toLowerCase()
+    .split(' ')
+    .map((word) => 
+      ['de', 'do', 'da', 'dos', 'das', 'e'].includes(word) 
+        ? word 
+        : word.charAt(0).toUpperCase() + word.slice(1)
+    )
+    .join(' ')
+    .replace(/\bSao\b/g, 'São');
+  
+  return estado ? `${cidade}/${estado}` : cidade;
+}
+
 export function UnifiedTripSearchV2({ 
   viopOnly = false,
   autoSearchParams
 }: UnifiedTripSearchV2Props) {
   const [loading, setLoading] = useState<boolean>(false);
   const [searchResult, setSearchResult] = useState<UnifiedSearchResult | null>(null);
+  const [filters, setFilters] = useState<FilterState>({
+    timeOfDay: [],
+    busTypes: [],
+    carriers: [],
+  });
+  const [sortBy, setSortBy] = useState<SortType>('departure');
+  const [selectedDate, setSelectedDate] = useState<string>(
+    autoSearchParams?.data || new Date().toISOString().split('T')[0]
+  );
+  const [showSearchForm, setShowSearchForm] = useState<boolean>(false);
+  
+  const [breadcrumbOrigin, setBreadcrumbOrigin] = useState<string>('');
+  const [breadcrumbDestination, setBreadcrumbDestination] = useState<string>('');
 
   useEffect(() => {
     if (autoSearchParams) {
@@ -56,6 +78,44 @@ export function UnifiedTripSearchV2({
     }
   }, [autoSearchParams]);
 
+  useEffect(() => {
+    const fetchBreadcrumbNames = async () => {
+      if (!searchResult) return;
+
+      try {
+        const origensResponse = await fetch('/api/viop/origens?q=');
+        const origensData: ViopCitiesResponse = await origensResponse.json();
+        
+        if (origensData.ok && origensData.items) {
+          const originCity: ViopCity | undefined = origensData.items.find(
+            (city: ViopCity) => city.id === searchResult.searchParams.departureCity
+          );
+          if (originCity) {
+            setBreadcrumbOrigin(formatViopCity(originCity.nome));
+          }
+        }
+
+        const destinosResponse = await fetch(
+          `/api/viop/destinos?origemId=${searchResult.searchParams.departureCity}&q=`
+        );
+        const destinosData: ViopCitiesResponse = await destinosResponse.json();
+        
+        if (destinosData.ok && destinosData.items) {
+          const destCity: ViopCity | undefined = destinosData.items.find(
+            (city: ViopCity) => city.id === searchResult.searchParams.arrivalCity
+          );
+          if (destCity) {
+            setBreadcrumbDestination(formatViopCity(destCity.nome));
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao buscar nomes para breadcrumb:', error);
+      }
+    };
+
+    fetchBreadcrumbNames();
+  }, [searchResult]);
+
   const handleSearch = async (params: {
     departureCity: string;
     arrivalCity: string;
@@ -63,10 +123,9 @@ export function UnifiedTripSearchV2({
     passengers: number;
   }): Promise<void> => {
     setLoading(true);
+    setShowSearchForm(false);
     try {
       if (viopOnly) {
-        console.log('🟢 Modo de busca ativado');
-
         const departureParts = params.departureCity.split('|');
         const arrivalParts = params.arrivalCity.split('|');
 
@@ -88,30 +147,25 @@ export function UnifiedTripSearchV2({
           passengers: params.passengers,
         });
 
-const tripsOrdenados = trips.sort((a, b) => {
-  const horarioA = a.departureTime?.split('T')[1]?.split(':').slice(0, 2).join(':') || '00:00';
-  const horarioB = b.departureTime?.split('T')[1]?.split(':').slice(0, 2).join(':') || '00:00';
-  const [horaA, minA] = horarioA.split(':').map(Number);
-  const [horaB, minB] = horarioB.split(':').map(Number);
-  return (horaA * 60 + minA) - (horaB * 60 + minB);
-});
+        const tripsOrdenados = trips.sort((a, b) => {
+          const horarioA = a.departureTime?.split('T')[1]?.split(':').slice(0, 2).join(':') || '00:00';
+          const horarioB = b.departureTime?.split('T')[1]?.split(':').slice(0, 2).join(':') || '00:00';
+          const [horaA, minA] = horarioA.split(':').map(Number);
+          const [horaB, minB] = horarioB.split(':').map(Number);
+          return (horaA * 60 + minA) - (horaB * 60 + minB);
+        });
 
-const result: UnifiedSearchResult = {
-  trips: tripsOrdenados,
-  searchParams: params,
-  providers: {
-    distribusion: {
-      success: false,
-      count: 0,
-    },
-    viop: {
-      success: true,
-      count: tripsOrdenados.length,
-    },
-  },
-};
+        const result: UnifiedSearchResult = {
+          trips: tripsOrdenados,
+          searchParams: params,
+          providers: {
+            distribusion: { success: false, count: 0 },
+            viop: { success: true, count: tripsOrdenados.length },
+          },
+        };
 
-setSearchResult(result);
+        setSearchResult(result);
+        setSelectedDate(params.departureDate);
       } else {
         const response = await fetch('/api/search/unified', {
           method: 'POST',
@@ -123,6 +177,7 @@ setSearchResult(result);
 
         const data: UnifiedSearchResult = await response.json();
         setSearchResult(data);
+        setSelectedDate(params.departureDate);
       }
     } catch (error) {
       console.error('Erro na busca:', error);
@@ -139,7 +194,7 @@ setSearchResult(result);
         return;
       }
 
-      const servico = trip.id.replace(/^viop-/, '');
+      const servico = trip.id.replace(/^viop-conexao-/, '').replace(/^viop-/, '').split('-')[0];
       const origem = trip.departureCityCode || trip.departureCity;
       const destino = trip.arrivalCityCode || trip.arrivalCity;
       const dataISO = trip.departureTime;
@@ -151,47 +206,147 @@ setSearchResult(result);
       if (destino) params.set('destino', destino);
       if (data) params.set('data', data);
 
-      window.location.assign(`/buscar-viop/assentos?${params.toString()}`);
+      //Detectar se é conexão
+      if (trip.conexao) {
+        window.location.assign(`/buscar-viop/conexao?${params.toString()}`);
+      } else {
+        window.location.assign(`/buscar-viop/assentos?${params.toString()}`);
+      }
       return;
     }
 
     window.open(trip.bookingUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const handleDateChange = (newDate: string) => {
+    if (searchResult?.searchParams) {
+      handleSearch({
+        ...searchResult.searchParams,
+        departureDate: newDate
+      });
+    }
+  };
+
+  const getFilteredAndSortedTrips = (): UnifiedTrip[] => {
+    if (!searchResult) return [];
+    let filtered = applyFilters(searchResult.trips, filters);
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'price':
+          return a.price - b.price;
+        case 'duration':
+          return a.duration - b.duration;
+        case 'departure':
+        default:
+          const timeA = a.departureTime.split('T')[1] || '';
+          const timeB = b.departureTime.split('T')[1] || '';
+          return timeA.localeCompare(timeB);
+      }
+    });
+    return filtered;
+  };
+
+  const filteredTrips = getFilteredAndSortedTrips();
+
+  // Formatar data para exibição
+  const dataFormatada = selectedDate 
+    ? format(new Date(selectedDate + 'T00:00:00'), "EEEE, d 'de' MMMM", { locale: ptBR })
+    : '';
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-sky-50 py-6 md:py-8">
-      <div className="container mx-auto px-4 max-w-7xl">
-        {/* Formulário de Busca com Card Premium */}
-        <div className="relative bg-white rounded-[2rem] shadow-2xl p-6 md:p-8 mb-8">
-          {/* Gradiente de fundo sutil */}
-          <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-blue-50 via-white to-sky-50 -z-10" />
-          
-          <UnifiedSearchWithAutocomplete 
-            onSearch={handleSearch} 
-            loading={loading}
-            initialValues={autoSearchParams ? {
-              departureCity: autoSearchParams.origem,
-              arrivalCity: autoSearchParams.destino,
-              departureDate: autoSearchParams.data
-            } : undefined}
-          />
+    <div className="min-h-screen">
+      
+      {/* 🔥 HEADER COMPACTO MOBILE (igual ClickBus) */}
+      {searchResult && (
+        <div className="md:hidden sticky top-0 z-50 bg-gradient-to-r from-blue-600 to-sky-600 text-white shadow-lg">
+          <div className="px-4 py-3">
+            {/* Rota */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm font-bold flex-1 min-w-0">
+                <span className="truncate">{breadcrumbOrigin || searchResult.searchParams.departureCity}</span>
+                <RefreshCw className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">{breadcrumbDestination || searchResult.searchParams.arrivalCity}</span>
+              </div>
+            </div>
+
+            {/* Data + Alterar */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="capitalize">{dataFormatada}</span>
+              </div>
+              <button
+                onClick={() => setShowSearchForm(!showSearchForm)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg text-xs font-semibold"
+              >
+                <Calendar className="w-3 h-3" />
+                Alterar origem e destino
+              </button>
+            </div>
+          </div>
         </div>
+      )}
+
+      <div className="container mx-auto px-4 max-w-7xl">
+        
+        {/* Breadcrumb Desktop */}
+        {searchResult && (
+          <div className="hidden md:block py-4 text-sm text-gray-600">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="hover:text-blue-600 cursor-pointer">Passagens de ônibus</span>
+              <ChevronRight className="w-4 h-4" />
+              <span className="hover:text-blue-600 cursor-pointer">
+                {breadcrumbOrigin || searchResult.searchParams.departureCity}
+              </span>
+              <ChevronRight className="w-4 h-4" />
+              <span className="font-semibold text-gray-900">
+                {breadcrumbDestination || searchResult.searchParams.arrivalCity}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Barra de Busca - Desktop sempre visível / Mobile somente se showSearchForm */}
+        {searchResult && (
+          <div className={`${showSearchForm ? 'block' : 'hidden'} md:block`}>
+            <SearchBar
+              initialOrigin={searchResult.searchParams.departureCity}
+              initialDestination={searchResult.searchParams.arrivalCity}
+              initialDate={selectedDate}
+              onSearch={(params: { origin: string; destination: string; date: string }) => handleSearch({
+                departureCity: params.origin,
+                arrivalCity: params.destination,
+                departureDate: params.date,
+                passengers: 1
+              })}
+            />
+          </div>
+        )}
+
+        {/* Seletor de Dias */}
+        {searchResult && !showSearchForm && (
+          <div className="md:mt-4">
+            <DaySelector
+              selectedDate={selectedDate}
+              onDateSelect={handleDateChange}
+            />
+          </div>
+        )}
 
         {/* Loading State */}
         {loading && (
-          <div className="bg-white rounded-[2rem] shadow-2xl p-12 text-center">
+          <div className="bg-white rounded-2xl shadow-lg p-12 text-center mt-4">
             <div className="max-w-md mx-auto">
               <div className="relative inline-block mb-6">
-                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-sky-600 rounded-3xl flex items-center justify-center shadow-xl">
-                  <Loader2 className="w-12 h-12 text-white animate-spin" />
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-sky-600 rounded-2xl flex items-center justify-center shadow-xl">
+                  <Loader2 className="w-10 h-10 text-white animate-spin" />
                 </div>
-                <Sparkles className="absolute -top-2 -right-2 w-8 h-8 text-yellow-400 animate-pulse" />
+                <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-yellow-400 animate-pulse" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
                 Buscando viagens...
               </h3>
-              <p className="text-gray-600">
-                Aguarde enquanto encontramos as melhores opções para você
+              <p className="text-gray-600 text-sm">
+                Aguarde enquanto encontramos as melhores opções
               </p>
             </div>
           </div>
@@ -199,126 +354,99 @@ setSearchResult(result);
 
         {/* Resultados */}
         {searchResult && !loading && (
-          <div className="space-y-6">
-            {/* Card de Resumo dos Resultados - PREMIUM */}
-            <div className="relative bg-gradient-to-r from-blue-600 to-sky-600 rounded-[2rem] shadow-2xl p-6 md:p-8 overflow-hidden">
-              {/* Efeito de brilho animado */}
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-sky-500/20 to-blue-500/20 animate-pulse" />
-              
-              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="p-4 bg-white/20 backdrop-blur-sm rounded-2xl shadow-lg">
-                    <Package className="w-10 h-10 md:w-12 md:h-12 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-3xl md:text-4xl font-black text-white">
-                      {searchResult.trips.length} {searchResult.trips.length === 1 ? 'Viagem' : 'Viagens'}
-                    </h2>
-                    <p className="text-blue-100 text-sm md:text-base mt-1">
-                      {searchResult.trips.length === 0 
-                        ? 'Nenhum resultado encontrado' 
-                        : 'Selecione a melhor opção para você'}
-                    </p>
-                  </div>
-                </div>
-                
-                {/* Badge de contagem com efeito premium */}
-                {searchResult.trips.length > 0 && (
-                  <div className="flex items-center gap-3 px-6 py-3 bg-white/20 backdrop-blur-sm rounded-2xl border-2 border-white/30 shadow-lg">
-                    <Sparkles className="w-6 h-6 text-yellow-400 animate-pulse" />
-                    <span className="font-black text-2xl text-white">{searchResult.trips.length}</span>
-                  </div>
-                )}
-              </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 mt-4">
+            {/* Sidebar Desktop */}
+            <div className="hidden lg:block">
+              <FilterSidebar
+                trips={searchResult.trips}
+                onFilterChange={setFilters}
+              />
             </div>
 
-            {/* Lista de Viagens */}
-            {searchResult.trips.length > 0 ? (
-              <div className="space-y-4">
-                {searchResult.trips.map((trip) => (
-                  <div 
-                    key={trip.id}
-                    className="transform transition-all duration-300 hover:scale-[1.02]"
-                  >
-                    <TripCard trip={trip} onSelect={handleTripSelect} />
+            {/* Lista de Resultados */}
+            <div>
+              {/* Header: Ordenação + Contagem */}
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 mb-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="text-sm">
+                    <span className="font-bold text-gray-900">
+                      {filteredTrips.length} {filteredTrips.length === 1 ? 'viagem' : 'viagens'}
+                    </span>
+                    {filteredTrips.length !== searchResult.trips.length && (
+                      <span className="text-gray-600 ml-1">
+                        (de {searchResult.trips.length} no total)
+                      </span>
+                    )}
                   </div>
-                ))}
-              </div>
-            ) : (
-              /* Estado: Nenhuma viagem encontrada */
-              <div className="bg-white rounded-[2rem] shadow-2xl p-12 text-center">
-                <div className="max-w-md mx-auto">
-                  <div className="relative inline-block mb-6">
-                    <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center shadow-xl">
-                      <SearchX className="w-12 h-12 text-gray-400" />
-                    </div>
-                  </div>
-                  <h3 className="text-3xl font-black text-gray-900 mb-3">
-                    Nenhuma viagem encontrada
-                  </h3>
-                  <p className="text-gray-600 text-lg mb-6">
-                    Não encontramos passagens para esta rota e data.
-                  </p>
-                  
-                  {/* Sugestões */}
-                  <div className="bg-gradient-to-br from-blue-50 to-sky-50 rounded-2xl p-6 text-left">
-                    <h4 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-blue-500" />
-                      Sugestões:
-                    </h4>
-                    <ul className="space-y-2 text-gray-700">
-                      <li className="flex items-start gap-2">
-                        <span className="text-blue-500 font-bold">•</span>
-                        <span>Tente outras datas próximas</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-blue-500 font-bold">•</span>
-                        <span>Verifique se digitou as cidades corretamente</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-blue-500 font-bold">•</span>
-                        <span>Busque por cidades próximas ao destino</span>
-                      </li>
-                    </ul>
+
+                  <div className="flex items-center gap-2">
+                    <ArrowUpDown className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm font-semibold text-gray-700">Ordenar por:</span>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as SortType)}
+                      className="text-sm font-semibold text-blue-600 border-2 border-gray-200 rounded-lg px-3 py-1.5 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                    >
+                      <option value="departure">Horário de saída</option>
+                      <option value="price">Menor preço</option>
+                      <option value="duration">Menor duração</option>
+                    </select>
                   </div>
                 </div>
               </div>
-            )}
+
+              {/* Lista de Viagens */}
+              {filteredTrips.length > 0 ? (
+                <div className="space-y-4">
+                  {filteredTrips.map((trip) => (
+                    <TripCard
+                      key={trip.id}
+                      trip={trip}
+                      onSelect={handleTripSelect}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+                  <div className="max-w-md mx-auto">
+                    <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <SearchX className="w-10 h-10 text-gray-400" />
+                    </div>
+                    <h3 className="text-2xl font-black text-gray-900 mb-2">
+                      Nenhuma viagem encontrada
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      Tente ajustar os filtros ou busque outra data
+                    </p>
+                    <button
+                      onClick={() => setFilters({ timeOfDay: [], busTypes: [], carriers: [] })}
+                      className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                      Limpar todos os filtros
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Estado Vazio (antes da busca) */}
+        {/* Estado Vazio */}
         {!searchResult && !loading && (
-          <div className="bg-white rounded-[2rem] shadow-2xl p-12 text-center">
+          <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
             <div className="max-w-md mx-auto">
               <div className="relative inline-block mb-6">
-                <div className="w-28 h-28 bg-gradient-to-br from-blue-500 to-sky-600 rounded-3xl flex items-center justify-center shadow-2xl transform hover:rotate-12 transition-transform duration-500">
-                  <SlidersHorizontal className="w-14 h-14 text-white" />
+                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-sky-600 rounded-2xl flex items-center justify-center shadow-2xl">
+                  <SearchX className="w-12 h-12 text-white" />
                 </div>
-                <Sparkles className="absolute -top-2 -right-2 w-10 h-10 text-yellow-400 animate-pulse" />
+                <Sparkles className="absolute -top-2 -right-2 w-8 h-8 text-yellow-400 animate-pulse" />
               </div>
-              <h3 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-sky-600 mb-4">
-                Faça sua primeira busca
+              <h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-sky-600 mb-3">
+                Faça sua busca
               </h3>
-              <p className="text-gray-600 text-lg mb-8">
-                Preencha os campos acima para encontrar as melhores passagens de ônibus disponíveis
+              <p className="text-gray-600">
+                Use o formulário acima para encontrar passagens
               </p>
-              
-              {/* Cards de Benefícios */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-                <div className="bg-gradient-to-br from-blue-50 to-sky-50 rounded-2xl p-4 border-2 border-blue-100">
-                  <div className="text-3xl mb-2">💎</div>
-                  <div className="font-bold text-blue-900 text-sm">Melhores Preços</div>
-                </div>
-                <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl p-4 border-2 border-sky-100">
-                  <div className="text-3xl mb-2">⚡</div>
-                  <div className="font-bold text-sky-900 text-sm">Compra Rápida</div>
-                </div>
-                <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl p-4 border-2 border-yellow-100">
-                  <div className="text-3xl mb-2">🔒</div>
-                  <div className="font-bold text-yellow-900 text-sm">100% Seguro</div>
-                </div>
-              </div>
             </div>
           </div>
         )}

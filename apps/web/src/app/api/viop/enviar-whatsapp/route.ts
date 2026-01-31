@@ -1,6 +1,7 @@
 // apps/web/src/app/api/viop/enviar-whatsapp/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 import Handlebars from 'handlebars';
 import QRCode from 'qrcode';
 import { enviarBilhetePDFWhatsApp } from '@/lib/evolution-whatsapp';
@@ -117,9 +118,10 @@ export async function POST(request: NextRequest) {
 
     console.log('🖨️ Gerando PDF com Puppeteer...');
 
-    const browser = await puppeteer.launch({ 
+    const browser = await puppeteer.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     
     const page = await browser.newPage();

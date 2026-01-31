@@ -5,7 +5,10 @@ import chromium from '@sparticuz/chromium';
 import Handlebars from 'handlebars';
 import QRCode from 'qrcode';
 import { kv } from '@vercel/kv';
-export const runtime = 'nodejs';
+
+// 🔥 DETECTAR AMBIENTE
+const isProduction = process.env.NODE_ENV === 'production';
+const isVercel = !!process.env.VERCEL;
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
@@ -439,12 +442,14 @@ const HTML_TEMPLATE = `
 `;
 
 export async function POST(request: NextRequest) {
+  let browser = null;
+  
   try {
     const { orderId } = await request.json();
 
     console.log('📄 Gerando PDF para orderId:', orderId);
 
-    // 🔥 BUSCAR DADOS REAIS DO CACHE KV (salvos pelo confirmar-reserva)
+    // 🔥 BUSCAR DADOS REAIS DO CACHE KV
     const bilheteCache = await kv.get(`bilhete:${orderId}`);
 
     if (!bilheteCache) {
@@ -482,7 +487,7 @@ export async function POST(request: NextRequest) {
         qrCodeTaxaBase64 = await QRCode.toDataURL(reserva.qrCodeTaxaEmbarque, { width: 90, margin: 1 });
       }
     } catch (error) {
-      console.error('Erro ao gerar QR codes:', error);
+      console.error('⚠️ Erro ao gerar QR codes:', error);
     }
 
     // Preparar dados para o template
@@ -534,28 +539,81 @@ export async function POST(request: NextRequest) {
     };
 
     // Compilar template
+    console.log('📄 Compilando template HTML...');
     const template = Handlebars.compile(HTML_TEMPLATE);
     const html = template(templateData);
 
-    // Gerar PDF com Puppeteer + Chromium serverless
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    });
+    // ========== 🔥 CONFIGURAÇÃO PUPPETEER PARA VERCEL ==========
+    console.log('🖨️ Gerando PDF com Puppeteer...');
+    console.log('📍 Ambiente:', { isProduction, isVercel });
 
+    if (isVercel || isProduction) {
+      // 🚀 PRODUÇÃO NO VERCEL
+      console.log('🚀 Rodando no Vercel/Produção');
+      
+      browser = await puppeteer.launch({
+        args: [
+          ...chromium.args,
+          '--disable-gpu',
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins,site-per-process',
+          '--single-process',
+          '--no-zygote'
+        ],
+        executablePath: await chromium.executablePath(),
+        headless: true,
+      });
+      
+      console.log('✅ Browser Chromium iniciado com sucesso');
+      
+    } else {
+      // 💻 DESENVOLVIMENTO LOCAL
+      console.log('💻 Rodando em desenvolvimento local');
+      
+      browser = await puppeteer.launch({
+        headless: true,
+        executablePath: 
+          process.env.CHROME_PATH || 
+          process.platform === 'win32' 
+            ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+            : process.platform === 'darwin'
+            ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+            : '/usr/bin/google-chrome',
+      });
+      
+      console.log('✅ Browser Chrome local iniciado');
+    }
     
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    
+    // Configurar viewport para A4 landscape
+    await page.setViewport({ 
+      width: 1122, 
+      height: 793 
+    });
+    
+    console.log('📝 Definindo conteúdo HTML...');
+    
+    await page.setContent(html, { 
+      waitUntil: 'networkidle0',
+      timeout: 30000 
+    });
+    
+    console.log('🖨️ Gerando PDF...');
     
     const pdfBuffer = await page.pdf({
       format: 'A4',
       landscape: true,
       printBackground: true,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
+      preferCSSPageSize: true,
     });
     
     await browser.close();
+    browser = null;
 
     // Converter para Buffer
     const buffer = Buffer.from(pdfBuffer);
@@ -564,13 +622,30 @@ export async function POST(request: NextRequest) {
 
     // Retornar PDF
     return new NextResponse(buffer, {
+      status: 200,
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="bilhete-${orderId}.pdf"`,
+        'Content-Length': buffer.length.toString(),
       },
     });
+
   } catch (error) {
-    console.error('Erro ao gerar PDF:', error);
-    return NextResponse.json({ error: 'Erro ao gerar PDF' }, { status: 500 });
+    console.error('❌ Erro ao gerar PDF:', error);
+    
+    // Garantir que o browser seja fechado em caso de erro
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error('⚠️ Erro ao fechar browser:', closeError);
+      }
+    }
+    
+    return NextResponse.json({ 
+      error: 'Erro ao gerar PDF',
+      details: error instanceof Error ? error.message : 'Erro desconhecido',
+      stack: error instanceof Error ? error.stack : undefined
+    }, { status: 500 });
   }
 }

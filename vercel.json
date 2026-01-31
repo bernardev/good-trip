@@ -3,6 +3,14 @@
     "api/**/*.ts": {
       "memory": 1024,
       "maxDuration": 10
+    },
+    "apps/web/src/app/api/viop/gerar-pdf/route.ts": {
+      "memory": 3008,
+      "maxDuration": 60
+    },
+    "apps/web/src/app/api/viop/enviar-whatsapp/route.ts": {
+      "memory": 3008,
+      "maxDuration": 60
     }
   },
   "regions": ["gru1"]

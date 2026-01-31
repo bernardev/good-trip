@@ -5,6 +5,7 @@ import chromium from '@sparticuz/chromium';
 import Handlebars from 'handlebars';
 import QRCode from 'qrcode';
 import { kv } from '@vercel/kv';
+export const runtime = 'nodejs';
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
@@ -539,10 +540,10 @@ export async function POST(request: NextRequest) {
     // Gerar PDF com Puppeteer + Chromium serverless
     const browser = await puppeteer.launch({
       args: chromium.args,
-      defaultViewport: null,
       executablePath: await chromium.executablePath(),
       headless: true,
     });
+
     
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });

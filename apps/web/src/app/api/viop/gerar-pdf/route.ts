@@ -6,6 +6,10 @@ import Handlebars from 'handlebars';
 import QRCode from 'qrcode';
 import { kv } from '@vercel/kv';
 
+// 🔥 CONFIGURAÇÕES PARA VERCEL (Next.js 13+)
+export const maxDuration = 60; // 60 segundos
+export const dynamic = 'force-dynamic';
+
 // 🔥 DETECTAR AMBIENTE
 const isProduction = process.env.NODE_ENV === 'production';
 const isVercel = !!process.env.VERCEL;

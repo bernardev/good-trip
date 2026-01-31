@@ -1,96 +1,25 @@
-//buscar-viop/confirmacao/page.tsx
-
+// apps/web/src/app/buscar-viop/confirmacao/page.tsx
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { Loader2, XCircle, Download, ArrowLeft } from 'lucide-react';
+import { Loader2, Download, MessageCircle } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { QRCodeSVG } from 'qrcode.react';
 
-type ReservaStatus = 'loading' | 'success' | 'error';
-
-type ReservaResult = {
+type ReservaData = {
   localizador: string;
-  status: 'CONFIRMADO' | 'NEGADO';
+  numeroBilhete: string;
   total: number;
-  numeroBilhete?: string;
-  numeroSistema?: string;
-  origemNome?: string;
-  destinoNome?: string;
-  data?: string;
-  dataFormatada?: string;
-  horarioSaida?: string;
-  horarioChegada?: string;
-  duracaoFormatada?: string;
-  empresa?: string;
-  classe?: string;
-  assentos?: string[];
-  localizadores?: string[];
-  servico?: string;
-  poltrona?: string;
-  passageiro?: {
+  origemNome: string;
+  destinoNome: string;
+  dataFormatada: string;
+  horarioSaida: string;
+  empresa: string;
+  classe: string;
+  assentos: string[];
+  passageiro: {
     nome: string;
     email: string;
-    documento?: string;
   };
-  // 🔥 NOVO: Array completo de passageiros
-  passageiros?: Array<{
-    assento: string;
-    nomeCompleto: string;
-    docNumero: string;
-    docTipo: string;
-    nacionalidade: string;
-    telefone: string;
-    email?: string;
-  }>;
-  // 🔥 NOVO: Dados específicos de cada bilhete
-  bilhetes?: Array<{
-    assento: string;
-    localizador: string;
-    numeroBilhete: string;
-    passageiro: {
-      assento: string;
-      nomeCompleto: string;
-      docNumero: string;
-      docTipo: string;
-      nacionalidade: string;
-      telefone: string;
-      email?: string;
-    };
-  }>;
-  qrCode?: string;
-  qrCodeBpe?: string;
-  qrCodeTaxaEmbarque?: string;
-  chaveBpe?: string;
-  taxaEmbarque?: number;
-  pedagio?: number;
-  tarifa?: number;
-  outros?: number;
-  seguro?: number;
-  protocolo?: string;
-  dataEmissao?: string;
-  serie?: string;
-  numeroBPe?: string;
-  prefixo?: string;
-  plataforma?: string;
-  linha?: string;
-  cabecalhoEmitente?: {
-    razaoSocial: string;
-    cnpj: string;
-    inscricaoEstadual: string;
-    endereco: string;
-    numero: string;
-    bairro: string;
-    cidade: string;
-    uf: string;
-    cep: string;
-  };
-  dataHoraEmbarqueInicio?: string;
-  dataHoraEmbarqueFim?: string;
-  orgaoConcedenteId?: number;
-  customizacaoRodapeCupomDeEmbarque?: string;
-  _teste?: boolean;
 };
 
 function ConfirmacaoContent() {
@@ -98,490 +27,275 @@ function ConfirmacaoContent() {
   const orderId = sp.get('order_id');
   const status = sp.get('status');
   
-  const [reservaStatus, setReservaStatus] = useState<ReservaStatus>('loading');
-  const [reserva, setReserva] = useState<ReservaResult | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [reserva, setReserva] = useState<ReservaData | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   useEffect(() => {
-    if (status !== 'paid' && status !== 'approved') {
-      setReservaStatus('error');
-      setErro('Pagamento não foi aprovado');
-      return;
+    if (orderId && status === 'paid') {
+      buscarDadosReserva();
     }
-    emitirBilhete();
   }, [orderId, status]);
 
-  async function emitirBilhete() {
+  async function buscarDadosReserva() {
     try {
-      setReservaStatus('loading');
-      
+      // 🔥 Chamar confirmar-reserva que salva no KV e retorna os dados
       const res = await fetch('/api/viop/confirmar-reserva', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, status }),
+        body: JSON.stringify({ orderId, status: 'paid' })
       });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Erro ao processar reserva');
-      }
-
-      const data: ReservaResult = await res.json();
       
-      if (data.status === 'NEGADO') {
-        throw new Error('Reserva foi negada pela operadora');
+      if (res.ok) {
+        const data = await res.json();
+        setReserva(data);
+      } else {
+        console.error('Erro ao buscar reserva');
       }
-
-      setReserva(data);
-      setReservaStatus('success');
-    } catch (err) {
-      console.error('Erro ao emitir bilhete:', err);
-      setErro(err instanceof Error ? err.message : 'Erro desconhecido');
-      setReservaStatus('error');
+      setLoading(false);
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+      setLoading(false);
     }
   }
 
-  // Loading
-  if (reservaStatus === 'loading') {
+  async function handleBaixarBilhete() {
+    setDownloadingPdf(true);
+    
+    try {
+      const res = await fetch('/api/viop/gerar-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId })
+      });
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bilhete-${orderId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Erro:', error);
+      alert('Erro ao baixar bilhete');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
+  async function handleEnviarWhatsApp() {
+    setSendingWhatsApp(true);
+    
+    try {
+      const res = await fetch('/api/viop/enviar-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+
+      if (res.ok) {
+        alert('✅ Bilhete enviado via WhatsApp com sucesso!');
+      } else {
+        alert('❌ Erro ao enviar WhatsApp');
+      }
+    } catch (error) {
+      console.error('Erro:', error);
+      alert('❌ Erro ao enviar WhatsApp');
+    } finally {
+      setSendingWhatsApp(false);
+    }
+  }
+
+  if (loading) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-lg p-8 text-center max-w-md">
-          <Loader2 className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Emitindo seu bilhete...</h2>
-          <p className="text-gray-600">Aguarde enquanto processamos sua reserva</p>
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+      </main>
+    );
+  }
+
+  if (!reserva) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <p className="text-red-600 font-semibold">Reserva não encontrada</p>
         </div>
       </main>
     );
   }
 
-  // Error
-  if (reservaStatus === 'error') {
-    return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-lg p-8 text-center max-w-md">
-          <XCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Erro ao emitir bilhete</h2>
-          <p className="text-gray-600 mb-6">{erro}</p>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Voltar para início
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  const chaveBpeFormatada = reserva?.chaveBpe ? 
-    reserva.chaveBpe.match(/.{1,4}/g)?.join(' ') || reserva.chaveBpe : '';
-
-  const numAssentos = reserva?.assentos?.length || 1;
-  const assentos = reserva?.assentos || [reserva?.poltrona || ''];
-  const localizadores = reserva?.localizadores || [reserva?.localizador || ''];
-
-  // Success - Bilhete(s) no formato 3 colunas (IGUAL VISUALIZAR-BILHETE)
   return (
-    <>
-      <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    <main className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-5xl mx-auto">
         
-        @media print {
-          body * { visibility: hidden; }
-          .bilhete-print, .bilhete-print * { visibility: visible; }
-          .bilhete-print {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            page-break-after: always;
-          }
-          .no-print { display: none !important; }
-          @page { 
-            size: A4 landscape;
-            margin: 0;
-          }
-        }
-        
-        .bilhete-print {
-          font-family: 'Inter', system-ui, -apple-system, sans-serif;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-      `}</style>
-
-      <main className="min-h-screen bg-gray-100 py-4 px-4">
-        <div className="max-w-[1200px] mx-auto mb-4 no-print flex gap-3">
-          <Link href="/" className="inline-flex items-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-50 transition-colors border border-gray-300">
-            <ArrowLeft className="w-4 h-4" />
-            Voltar
-          </Link>
-
-          <button onClick={() => window.print()} className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors ml-auto">
-            <Download className="w-4 h-4" />
-            Imprimir
-          </button>
-        </div>
-
-        {assentos.map((assento, index) => {
-          const localizadorAtual = localizadores[index] || reserva?.localizador || '';
+        {/* Grid 2 colunas */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6">
           
-          // 🔥 NOVO: Buscar passageiro correto para este bilhete com tipagem forte
-          const passageiroAtual = reserva?.bilhetes?.[index]?.passageiro || 
-                                  reserva?.passageiros?.find(p => p.assento === assento) ||
-                                  reserva?.passageiro;
-          
-          // 🔥 Type guard com verificação de undefined
-          const nomePassageiro = passageiroAtual && 'nomeCompleto' in passageiroAtual
-            ? passageiroAtual.nomeCompleto 
-            : passageiroAtual?.nome || '';
-          
-          const docPassageiro = passageiroAtual && 'docNumero' in passageiroAtual
-            ? passageiroAtual.docNumero 
-            : passageiroAtual?.documento || '';
+          {/* ========== COLUNA ESQUERDA: Agradecimento ========== */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            
+            {/* Título */}
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Obrigado pela sua compra
+            </h1>
+            
+            {/* Texto confirmação */}
+            <p className="text-gray-600 mb-1">
+              Acabamos de enviar um e-mail de confirmação com seu bilhete anexado para{' '}
+              <span className="font-semibold text-gray-900">{reserva.passageiro.email}</span>
+            </p>
+            
+            <p className="text-sm text-gray-500 mb-8">
+              Se não conseguir encontrar o bilhete, verifique sua pasta de spam.
+            </p>
 
-          return (
-            <div key={index} className="bilhete-print">
-              <div className="max-w-[1200px] mx-auto bg-white" style={{ padding: '5mm' }}>
+            {/* Botões de ação */}
+            <div className="space-y-3 mb-8">
+              <button
+                onClick={handleBaixarBilhete}
+                disabled={downloadingPdf}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {downloadingPdf ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Abrindo bilhete...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-5 h-5" />
+                    Baixar o bilhete
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleEnviarWhatsApp}
+                disabled={sendingWhatsApp}
+                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sendingWhatsApp ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <MessageCircle className="w-5 h-5" />
+                    Receber via WhatsApp
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Dica */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold">Dica:</span> Salve o bilhete no seu celular para acesso offline
+              </p>
+            </div>
+
+            {/* Informações da Viagem */}
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                Informações da Viagem
+              </h2>
+
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Origem</span>
+                  <span className="font-medium text-gray-900">{reserva.origemNome}</span>
+                </div>
                 
-                {/* Container 3 colunas */}
-                <div className="flex flex-row h-full" style={{ gap: 0 }}>
-                  
-                  {/* ========== COLUNA 1 (33%) ========== */}
-                  <div className="flex flex-col" style={{ width: '33%', padding: '10px 12px', borderRight: '1px dashed #ccc', gap: '2rem' }}>
-                    
-                    {/* Header Empresa */}
-                    <div>
-                      <div className="text-center mb-2">
-                        <h2 className="font-bold" style={{ fontSize: '12px', margin: 0 }}>
-                          {reserva?.cabecalhoEmitente?.razaoSocial}
-                        </h2>
-                        <p style={{ fontSize: '9px', margin: '1px 0' }}>
-                          CNPJ: {reserva?.cabecalhoEmitente?.cnpj} IE: {reserva?.cabecalhoEmitente?.inscricaoEstadual}
-                        </p>
-                        <p style={{ fontSize: '9px', margin: '1px 0' }}>
-                          {reserva?.cabecalhoEmitente?.endereco}, {reserva?.cabecalhoEmitente?.numero}, {reserva?.cabecalhoEmitente?.bairro}, CEP {reserva?.cabecalhoEmitente?.cep}
-                        </p>
-                        <p style={{ fontSize: '9px', fontWeight: 600, margin: '1px 0' }}>
-                          Documento Auxiliar do Bilhete de Passagem Eletrônico
-                        </p>
-                      </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Destino</span>
+                  <span className="font-medium text-gray-900">{reserva.destinoNome}</span>
+                </div>
 
-                      {/* Info Viagem */}
-                      <div>
-                        <div className="flex flex-col">
-                          <div>
-                            <span className="font-bold" style={{ fontSize: '9px', color: '#333' }}>
-                              Origem: {reserva?.origemNome}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="font-bold" style={{ fontSize: '9px', color: '#333' }}>
-                              Destino: {reserva?.destinoNome}
-                            </span>
-                          </div>
-                        </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Data</span>
+                  <span className="font-medium text-gray-900">{reserva.dataFormatada}</span>
+                </div>
 
-                        <div className="flex justify-between items-end" style={{ marginBottom: '3px' }}>
-                          <div>
-                            <span className="font-bold" style={{ fontSize: '9px' }}>Data:</span> {reserva?.dataFormatada}
-                          </div>
-                          <div className="text-right">
-                            <span className="font-bold" style={{ fontSize: '9px' }}>Hora:</span> {reserva?.horarioSaida}
-                          </div>
-                        </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Horário</span>
+                  <span className="font-medium text-gray-900">{reserva.horarioSaida}</span>
+                </div>
 
-                        <div className="flex justify-between items-end" style={{ marginBottom: '3px' }}>
-                          <div>
-                            <span className="font-bold" style={{ fontSize: '9px' }}>Poltrona: {assento}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="font-bold" style={{ fontSize: '9px' }}>Plataforma: {reserva?.plataforma || '-'}</span>
-                          </div>
-                        </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Empresa</span>
+                  <span className="font-medium text-gray-900">{reserva.empresa}</span>
+                </div>
 
-                        <div style={{ margin: '5px 0' }}>
-                          <span className="font-bold" style={{ fontSize: '9px' }}>Linha: {reserva?.linha}</span>
-                          <div className="flex justify-between items-end">
-                            <span style={{ fontSize: '10px' }}>Modalidade: {reserva?.classe}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-between items-end" style={{ marginBottom: '3px', fontSize: '10px' }}>
-                          <span>Prefixo: {reserva?.prefixo}</span>
-                          <span>Serviço: {reserva?.servico}</span>
-                        </div>
-
-                        {/* Tabela Financeira */}
-                        <table style={{ width: '100%', margin: '8px 0', borderCollapse: 'collapse', fontSize: '9px' }}>
-                          <tbody>
-                            <tr>
-                              <td style={{ padding: '1px 0' }}>Tarifa:</td>
-                              <td className="text-right" style={{ padding: '1px 0' }}>R$ {(reserva?.tarifa || 0).toFixed(2)}</td>
-                            </tr>
-                            <tr>
-                              <td style={{ padding: '1px 0' }}>Pedágio:</td>
-                              <td className="text-right">R$ {(reserva?.pedagio || 0).toFixed(2)}</td>
-                            </tr>
-                            <tr>
-                              <td style={{ padding: '1px 0' }}>Taxa de Embarque:</td>
-                              <td className="text-right">R$ {(reserva?.taxaEmbarque || 0).toFixed(2)}</td>
-                            </tr>
-                            <tr>
-                              <td style={{ padding: '1px 0' }}>Seguro:</td>
-                              <td className="text-right">R$ {(reserva?.seguro || 0).toFixed(2)}</td>
-                            </tr>
-                            <tr style={{ borderBottom: '1px dashed #ccc' }}>
-                              <td style={{ padding: '1px 0' }}>Outros:</td>
-                              <td className="text-right">R$ {(reserva?.outros || 0).toFixed(2)}</td>
-                            </tr>
-                            <tr>
-                              <td style={{ paddingTop: '5px', fontWeight: 700 }}>Valor total:</td>
-                              <td className="text-right font-bold" style={{ paddingTop: '5px' }}>R$ {((reserva?.total || 0) / numAssentos).toFixed(2)}</td>
-                            </tr>
-                            <tr>
-                              <td>Desconto:</td>
-                              <td className="text-right">R$ 0,00</td>
-                            </tr>
-                            <tr className="font-bold">
-                              <td>Valor a Pagar:</td>
-                              <td className="text-right">R$ {((reserva?.total || 0) / numAssentos).toFixed(2)}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-
-                        <div className="flex justify-between items-end" style={{ marginBottom: '3px', fontSize: '10px' }}>
-                          <span>Forma de pagamento</span>
-                          <span>Valor Pago</span>
-                        </div>
-                        <div className="flex justify-between items-end" style={{ marginBottom: '3px', fontSize: '10px' }}>
-                          <span>Vale Eletrônico WEBTEF</span>
-                          <span>R$ {((reserva?.total || 0) / numAssentos).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between items-end" style={{ fontSize: '10px' }}>
-                          <span>Troco:</span>
-                          <span>R$ 0,00</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Chave de Acesso */}
-                    <div>
-                      <div className="text-center">
-                        <p style={{ fontSize: '8px', marginBottom: '2px' }}>
-                          Consulte a chave de acesso em: <br />
-                          <a href="https://dfe-portal.svrs.rs.gov.br/bpe/qrcode" style={{ color: '#000', textDecoration: 'none' }}>
-                            dfe-portal.svrs.rs.gov.br/bpe/qrcode
-                          </a>
-                        </p>
-                        <strong style={{ fontSize: '8px', display: 'block', marginBottom: '5px' }}>
-                          {chaveBpeFormatada}
-                        </strong>
-
-                        {/* Barcode */}
-                        <div style={{ textAlign: 'center', overflow: 'hidden', marginTop: '1rem', marginBottom: '1rem' }}>
-                          <svg width="100%" height="40" style={{ maxWidth: '100%' }}>
-                            <rect width="100%" height="100%" fill="white"/>
-                            {[...Array(50)].map((_, i) => (
-                              <rect 
-                                key={i} 
-                                x={i * 4} 
-                                y="5" 
-                                width={Math.random() > 0.5 ? 1 : 2} 
-                                height="30" 
-                                fill="black"
-                              />
-                            ))}
-                          </svg>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start" style={{ gap: '0.5rem' }}>
-                        <div className="flex items-center" style={{ gap: '5px', marginTop: '5px' }}>
-                          {reserva?.qrCodeBpe && (
-                            <QRCodeSVG value={reserva.qrCodeBpe} size={90} level="M" />
-                          )}
-                        </div>
-                        <div style={{ fontSize: '8px', lineHeight: 1.1 }}>
-                          <p>Passageiro: {nomePassageiro}</p>
-                          <p>Doc: {docPassageiro}</p>
-                          <p>Tipo de Desconto: Tarifa promocional</p>
-                          <p>Bp-e nº: {reserva?.numeroBPe} Série: {reserva?.serie} | Tipo BP-e: 0</p>
-                          <p>Protocolo de Autorização: {reserva?.protocolo}</p>
-                          <p>Data de Autorização: {reserva?.dataEmissao ? new Date(reserva.dataEmissao).toLocaleString('pt-BR') : ''}</p>
-                          <p>Nº Bilhete: {reserva?.numeroBilhete}</p>
-                          <p>Localizador: {localizadorAtual}</p>
-                        </div>
-                      </div>
-
-                      <p style={{ fontSize: '8px', marginTop: '10px' }}>
-                        ICMS-RS 5,10 (17,00%) OUTROS TRIB-RS 4,80 (16,00%) Horário de Início do embarque: {reserva?.dataHoraEmbarqueInicio} Horário final do embarque: {reserva?.dataHoraEmbarqueFim} Classe de Serviço: (IC) {reserva?.classe}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* ========== COLUNA 2 (34%) ========== */}
-                  <div className="flex flex-col" style={{ width: '34%', padding: '10px 12px', borderRight: '1px dashed #ccc' }}>
-                    
-                    {/* 🔥 USAR HTML DA API (customizacaoRodapeCupomDeEmbarque) */}
-                    {reserva?.customizacaoRodapeCupomDeEmbarque && reserva.customizacaoRodapeCupomDeEmbarque.trim() !== '' ? (
-                      // HTML personalizado retornado pela API (já vem com regras corretas)
-                      <div 
-                        dangerouslySetInnerHTML={{ __html: reserva.customizacaoRodapeCupomDeEmbarque }}
-                        style={{ fontSize: '11px', textAlign: 'justify', lineHeight: 1.2 }}
-                      />
-                    ) : (
-                      // Fallback genérico (caso API não retorne nada)
-                      <div style={{ fontSize: '11px', textAlign: 'justify', lineHeight: 1.2 }}>
-                        <p style={{ marginBottom: '6px' }}>
-                          Os direitos e deveres dos passageiros podem ser consultados através do Guia de Orientação aos Passageiros, disponíveis no formato digital nos guichês, ônibus e site da empresa.
-                        </p>
-                        <p className="font-bold" style={{ marginTop: '8px' }}>
-                          Consulte as regras de cancelamento e remarcação com a empresa.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* 🔥 QR Code do Guia - APENAS para ANTT (ID 3) */}
-                    {reserva?.orgaoConcedenteId === 3 && (
-                      <div className="flex flex-col items-center mt-4 pt-4 border-t border-gray-200" style={{ gap: '0.5rem' }}>
-                        <p className="text-center font-semibold" style={{ fontSize: '12px' }}>
-                          Para ler o guia do passageiro<br />completo acesse pelo QRCode abaixo
-                        </p>
-                        <QRCodeSVG value="https://www.viacaoouroepratacom.br/guia-passageiros" size={90} level="M" />
-                        <a href="https://www.viacaoouroepratacom.br/guia-passageiros" style={{ fontSize: '8px', marginTop: '5px', color: '#000', textDecoration: 'none' }}>
-                          www.viacaoouroepratacom.br/guia-passageiros
-                        </a>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* ========== COLUNA 3 (33%) ========== */}
-                  <div className="flex flex-col justify-between" style={{ width: '33%', padding: '10px 12px' }}>
-                    
-                    <div>
-                      <div className="text-right w-full">
-                        <h3 className="text-center font-bold" style={{ fontSize: '12px', margin: 0 }}>Passagem Digital</h3>
-                        <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-                          <svg width="100%" height="40" style={{ maxWidth: '100%' }}>
-                            <rect width="100%" height="100%" fill="white"/>
-                            {[...Array(50)].map((_, i) => (
-                              <rect 
-                                key={i} 
-                                x={i * 4} 
-                                y="5" 
-                                width={Math.random() > 0.5 ? 1 : 2} 
-                                height="30" 
-                                fill="black"
-                              />
-                            ))}
-                          </svg>
-                        </div>
-                      </div>
-
-                      <div className="w-full text-center" style={{ borderBottom: '1px dashed #999', margin: '6px 0', fontSize: '8px', color: '#666', lineHeight: 0.1 }}>
-                        <span style={{ background: '#fff', padding: '0 5px' }}>Use esse documento para embarcar direto</span>
-                      </div>
-
-                      <div className="w-full flex flex-col flex-grow" style={{ gap: '4px' }}>
-                        <div style={{ marginBottom: '2px' }}>
-                          <span className="font-bold" style={{ fontSize: '8px' }}>Origem</span>
-                          <div className="font-bold" style={{ fontSize: '10px' }}>{reserva?.origemNome}</div>
-                          <div style={{ fontSize: '8px' }}>Local de Embarque: {reserva?.origemNome}</div>
-                        </div>
-
-                        <div style={{ marginBottom: '2px' }}>
-                          <span className="font-bold" style={{ fontSize: '8px' }}>Destino</span>
-                          <div className="font-bold" style={{ fontSize: '10px' }}>{reserva?.destinoNome}</div>
-                          <div style={{ fontSize: '8px' }}>Local de Desembarque: {reserva?.destinoNome}</div>
-                        </div>
-
-                        <div style={{ marginBottom: '2px', marginTop: '5px' }}>
-                          <span className="font-bold" style={{ fontSize: '8px' }}>Linha</span>
-                          <div className="font-bold" style={{ fontSize: '8px' }}>{reserva?.linha}</div>
-                        </div>
-
-                        <div className="flex justify-between items-end" style={{ marginTop: '5px' }}>
-                          <div>
-                            <span className="font-bold" style={{ fontSize: '8px' }}>Data da viagem</span>
-                            <div className="font-bold" style={{ fontSize: '10px' }}>{reserva?.dataFormatada}</div>
-                          </div>
-                          <div className="text-right">
-                            <span className="font-bold" style={{ fontSize: '8px' }}>Hora da viagem</span>
-                            <div className="font-bold" style={{ fontSize: '10px' }}>{reserva?.horarioSaida}</div>
-                          </div>
-                        </div>
-
-                        <div className="text-center font-bold" style={{ margin: '5px 0', fontSize: '10px' }}>
-                          Horário Inicio Embarque: {reserva?.dataHoraEmbarqueInicio?.split(' ')[1]} / Horário Fim Embarque: {reserva?.dataHoraEmbarqueFim?.split(' ')[1]}
-                        </div>
-
-                        <div className="flex justify-between items-start" style={{ margin: '8px 0' }}>
-                          <div style={{ width: '50%' }}>
-                            <span className="font-bold" style={{ fontSize: '8px' }}>Poltrona</span>
-                            <div style={{ fontSize: '20px', fontWeight: 800, lineHeight: 1 }}>{assento}</div>
-                          </div>
-                          <div style={{ width: '50%', textAlign: 'right' }}>
-                            <span className="font-bold" style={{ fontSize: '8px' }}>Plataforma</span>
-                            <div style={{ fontSize: '20px', fontWeight: 800, lineHeight: 1 }}>{reserva?.plataforma || '-'}</div>
-                          </div>
-                        </div>
-
-                        <div style={{ marginBottom: '2px' }}>
-                          <span className="font-bold" style={{ fontSize: '8px' }}>Nome</span>
-                          {/* 🔥 CORRIGIDO: Usa passageiro correto deste bilhete */}
-                          <div className="font-bold" style={{ fontSize: '8px' }}>{nomePassageiro?.toUpperCase()}</div>
-                          <span className="font-bold" style={{ fontSize: '8px' }}>Documento</span>
-                          {/* 🔥 CORRIGIDO: Usa documento correto deste bilhete */}
-                          <div className="font-bold" style={{ fontSize: '8px' }}>{docPassageiro}</div>
-                        </div>
-
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="font-bold" style={{ fontSize: '8px' }}>Tipo</span>
-                            <div className="font-bold" style={{ fontSize: '8px' }}>{reserva?.classe}</div>
-                          </div>
-                          <div className="text-right">
-                            <span className="font-bold" style={{ fontSize: '8px' }}>Nº Bilhete/BP-e</span>
-                            <div className="font-bold" style={{ fontSize: '8px' }}>{reserva?.numeroBilhete}</div>
-                            <div className="font-bold" style={{ fontSize: '8px' }}>{reserva?.numeroBPe}</div>
-                          </div>
-                        </div>
-
-                        <div style={{ marginBottom: '2px' }}>
-                          <span className="font-bold" style={{ fontSize: '8px' }}>Viação</span>
-                          <div className="font-bold" style={{ fontSize: '8px' }}>{reserva?.cabecalhoEmitente?.razaoSocial}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {reserva?.qrCodeTaxaEmbarque && (
-                      <div className="text-center flex flex-col justify-center items-center" style={{ marginTop: '10px', gap: '0.5rem' }}>
-                        <span className="font-bold" style={{ fontSize: '9px' }}>Rodoviária</span>
-                        <QRCodeSVG value={reserva.qrCodeTaxaEmbarque} size={90} level="M" style={{ marginTop: '2px' }} />
-                      </div>
-                    )}
-
-                    <div className="text-center" style={{ marginTop: '5px', fontSize: '9px' }}>
-                      <p>Para embarcar na rodoviária</p>
-                      <div style={{ lineHeight: 1 }}>
-                        <p style={{ fontSize: '9px' }}>Localizador</p>
-                        <p style={{ fontWeight: 800, fontSize: '14px' }}>{localizadorAtual}</p>
-                      </div>
-                      <a href="https://www.viacaoouroeprata.com.br/site/" style={{ color: 'gray', fontSize: '8px', textDecoration: 'none' }}>
-                        www.viacaoouroeprata.com.br/site
-                      </a>
-                    </div>
-                  </div>
-
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Classe</span>
+                  <span className="font-medium text-gray-900">{reserva.classe}</span>
                 </div>
               </div>
             </div>
-          );
-        })}
-      </main>
-    </>
+          </div>
+
+          {/* ========== COLUNA DIREITA: Resumo do Pedido ========== */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-6">
+              Resumo do seu pedido
+            </h2>
+
+            {/* Número da Reserva */}
+            <div className="mb-6">
+              <div className="text-sm text-gray-600 mb-1">Número de reserva</div>
+              <div className="text-2xl font-bold text-blue-600">{reserva.localizador}</div>
+            </div>
+
+            {/* Viagem */}
+            <div className="mb-6 pb-6 border-b border-gray-200">
+              <div className="text-xs text-gray-500 mb-2">{reserva.dataFormatada}</div>
+              <div className="font-semibold text-gray-900 mb-1">
+                {reserva.origemNome} → {reserva.destinoNome}
+              </div>
+              <div className="text-sm text-gray-600">
+                Partida: {reserva.horarioSaida}
+              </div>
+            </div>
+
+            {/* Passageiro */}
+            <div className="mb-6 pb-6 border-b border-gray-200">
+              <div className="text-sm text-gray-600 mb-1">1 passageiro</div>
+              <div className="font-semibold text-gray-900">{reserva.passageiro.nome}</div>
+              {reserva.assentos.length > 0 && (
+                <div className="text-sm text-gray-600 mt-1">
+                  Assento(s): {reserva.assentos.join(', ')}
+                </div>
+              )}
+            </div>
+
+            {/* Operadora */}
+            <div className="mb-6 pb-6 border-b border-gray-200">
+              <div className="text-sm text-gray-600">
+                Operado por <span className="font-medium text-gray-900">{reserva.empresa}</span>
+              </div>
+            </div>
+
+            {/* Total */}
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-base font-semibold text-gray-700">Total</span>
+                <span className="text-2xl font-bold text-blue-600">
+                  R$ {reserva.total.toFixed(2)}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500">
+                Incluindo todas as taxas e impostos
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }
 
@@ -593,7 +307,7 @@ function LoadingFallback() {
   );
 }
 
-export default function BilheteEletronicoPage() {
+export default function ConfirmacaoPage() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <ConfirmacaoContent />

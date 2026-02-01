@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@sparticuz/chromium": "^131.0.0",
     "@vercel/kv": "^3.0.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
@@ -21,7 +20,7 @@
     "next": "15.5.7",
     "next-auth": "^4.24.11",
     "pdf-lib": "^1.17.1",
-    "puppeteer-core": "^24.36.1",
+    "puppeteer": "^23.11.1",
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "react": "19.1.2",

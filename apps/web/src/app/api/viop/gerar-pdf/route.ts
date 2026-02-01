@@ -1,15 +1,9 @@
 // apps/web/src/app/api/viop/gerar-pdf/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer-core';
+import puppeteer from 'puppeteer';
 import Handlebars from 'handlebars';
 import QRCode from 'qrcode';
 import { kv } from '@vercel/kv';
-
-// Dynamic import para evitar problemas de build
-async function getChromium() {
-  const chromium = await import('@sparticuz/chromium');
-  return chromium.default;
-}
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
@@ -541,14 +535,19 @@ export async function POST(request: NextRequest) {
     const template = Handlebars.compile(HTML_TEMPLATE);
     const html = template(templateData);
 
-    // Gerar PDF com Puppeteer + Chromium serverless
-    const chromium = await getChromium();
-    
+    // Gerar PDF com Puppeteer (funciona na Vercel)
     const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu'
+      ],
     });
     
     const page = await browser.newPage();

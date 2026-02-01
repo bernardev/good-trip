@@ -1,9 +1,12 @@
 // apps/web/src/app/api/viop/gerar-pdf/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
 import Handlebars from 'handlebars';
 import QRCode from 'qrcode';
 import { kv } from '@vercel/kv';
+
+// 🔥 CONFIGURAÇÕES VERCEL
+export const maxDuration = 30;
+export const dynamic = 'force-dynamic';
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
@@ -442,7 +445,7 @@ export async function POST(request: NextRequest) {
 
     console.log('📄 Gerando PDF para orderId:', orderId);
 
-    // 🔥 BUSCAR DADOS REAIS DO CACHE KV (salvos pelo confirmar-reserva)
+    // Buscar dados do cache
     const bilheteCache = await kv.get(`bilhete:${orderId}`);
 
     if (!bilheteCache) {
@@ -453,16 +456,16 @@ export async function POST(request: NextRequest) {
     const reserva = typeof bilheteCache === 'string' ? JSON.parse(bilheteCache) : bilheteCache;
     console.log('✅ Dados do bilhete recuperados do cache');
 
-    // Formatar chave de acesso com espaços
+    // Formatar chave de acesso
     const chaveFormatada = reserva.chaveBpe?.match(/.{1,4}/g)?.join(' ') || '';
 
-    // Gerar linhas do barcode (mock)
+    // Gerar linhas do barcode
     const barcodeLines = Array.from({ length: 50 }, (_, i) => ({
       x: i * 4,
       width: Math.random() > 0.5 ? 1 : 2,
     }));
 
-    // 🔥 GERAR QR CODES COMO BASE64
+    // Gerar QR codes
     let qrCodeBpeBase64 = '';
     let qrCodeGuiaBase64 = '';
     let qrCodeTaxaBase64 = '';
@@ -480,10 +483,10 @@ export async function POST(request: NextRequest) {
         qrCodeTaxaBase64 = await QRCode.toDataURL(reserva.qrCodeTaxaEmbarque, { width: 90, margin: 1 });
       }
     } catch (error) {
-      console.error('Erro ao gerar QR codes:', error);
+      console.error('⚠️ Erro ao gerar QR codes:', error);
     }
 
-    // Preparar dados para o template
+    // Preparar dados do template
     const templateData = {
       nomeEmpresa: reserva.cabecalhoEmitente?.razaoSocial || '',
       cnpjEmpresa: reserva.cabecalhoEmitente?.cnpj || '',
@@ -531,51 +534,64 @@ export async function POST(request: NextRequest) {
       barcodeLines,
     };
 
-    // Compilar template
+    // Compilar HTML
+    console.log('📄 Compilando template HTML...');
     const template = Handlebars.compile(HTML_TEMPLATE);
     const html = template(templateData);
 
-    // Gerar PDF com Puppeteer (funciona na Vercel)
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ],
-    });
+    // 🔥 GERAR PDF COM PDFSHIFT (API externa - confiável!)
+    console.log('🖨️ Gerando PDF com PDFShift...');
     
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const PDFSHIFT_API_KEY = process.env.PDFSHIFT_API_KEY;
     
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      landscape: true,
-      printBackground: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 },
-    });
-    
-    await browser.close();
+    if (!PDFSHIFT_API_KEY) {
+      console.error('❌ PDFSHIFT_API_KEY não configurada!');
+      return NextResponse.json({ 
+        error: 'Serviço de PDF não configurado. Configure PDFSHIFT_API_KEY.' 
+      }, { status: 500 });
+    }
 
-    // Converter para Buffer
+    const pdfshiftResponse = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${Buffer.from(`api:${PDFSHIFT_API_KEY}`).toString('base64')}`,
+      },
+      body: JSON.stringify({
+        source: html,
+        landscape: true,
+        format: 'A4',
+        margin: { top: 0, right: 0, bottom: 0, left: 0 },
+        use_print: true,
+      }),
+    });
+
+    if (!pdfshiftResponse.ok) {
+      const errorText = await pdfshiftResponse.text();
+      console.error('❌ Erro PDFShift:', errorText);
+      throw new Error(`PDFShift error: ${pdfshiftResponse.status}`);
+    }
+
+    const pdfBuffer = await pdfshiftResponse.arrayBuffer();
     const buffer = Buffer.from(pdfBuffer);
 
     console.log('✅ PDF gerado com sucesso! Tamanho:', (buffer.length / 1024).toFixed(2), 'KB');
 
     // Retornar PDF
     return new NextResponse(buffer, {
+      status: 200,
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="bilhete-${orderId}.pdf"`,
+        'Content-Length': buffer.length.toString(),
       },
     });
+
   } catch (error) {
-    console.error('Erro ao gerar PDF:', error);
-    return NextResponse.json({ error: 'Erro ao gerar PDF' }, { status: 500 });
+    console.error('❌ Erro ao gerar PDF:', error);
+    return NextResponse.json({ 
+      error: 'Erro ao gerar PDF',
+      details: error instanceof Error ? error.message : 'Erro desconhecido'
+    }, { status: 500 });
   }
 }

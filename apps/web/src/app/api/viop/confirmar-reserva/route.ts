@@ -86,6 +86,7 @@ type BPEData = {
   cabecalhoEmitente?: CabecalhoEmitente;
   dataHoraEmbarqueInicio?: string;
   dataHoraEmbarqueFim?: string;
+  customizacaoRodapeCupomDeEmbarque?: string;
 };
 
 type ConfirmacaoResponse = {
@@ -335,7 +336,7 @@ export async function POST(req: NextRequest) {
       dataHoraEmbarqueFim: primeiroBilhete.bpe?.dataHoraEmbarqueFim,
       // 🔥 PRIORIDADE: orgaoConcedenteId das categorias > confirmarVenda
       orgaoConcedenteId: orgaoConcedenteIdViagem || primeiroBilhete.orgaoConcedenteId,
-      customizacaoRodapeCupomDeEmbarque: primeiroBilhete.customizacaoRodapeCupomDeEmbarque,
+      customizacaoRodapeCupomDeEmbarque: primeiroBilhete.bpe?.customizacaoRodapeCupomDeEmbarque,
       _teste: false,
     };
 

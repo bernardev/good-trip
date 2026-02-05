@@ -527,7 +527,7 @@ async function confirmarVenda(
     documentoPassageiro: passageiro.docNumero,
     tipoDocumentoPassageiro: "CPF",
     email: passageiro.email || 'naotemmail@goodtrip.com.br',
-    telefone: passageiro.telefone.replace(/\D/g, ''),
+    telefone: '93000000000',
     idFormaPagamento: 1,
     numOperacion: bloqueioResponse.numOperacion,
     localizador: bloqueioResponse.localizador,

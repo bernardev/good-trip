@@ -275,8 +275,23 @@ export async function POST(req: NextRequest) {
     const primeiroBilhete = bilhetesEmitidos[0];
     const bloqueioRef = primeiroBloqueioDados!;
 
-    // 🔥 Calcular valor total correto (preco já é total)
-    const valorTotal = reservaData.preco;
+    // 🔥 Calcular valor total REAL da BPe (não usar reservaData.preco que tem taxa administrativa)
+    const tarifaBPe = parseFloat(primeiroBilhete.bpe?.tarifa || '0');
+    const pedagogioBPe = parseFloat(primeiroBilhete.bpe?.pedagio || '0');
+    const taxaEmbarqueBPe = parseFloat(primeiroBilhete.bpe?.taxaEmbarque || '0');
+    const seguroBPe = parseFloat(primeiroBilhete.bpe?.seguro || '0');
+    const outrosBPe = parseFloat(primeiroBilhete.bpe?.outros || '0');
+    
+    const valorTotalBPe = tarifaBPe + pedagogioBPe + taxaEmbarqueBPe + seguroBPe + outrosBPe;
+    
+    console.log('💰 Valores da BPe:', {
+      tarifa: tarifaBPe,
+      pedagio: pedagogioBPe,
+      taxaEmbarque: taxaEmbarqueBPe,
+      seguro: seguroBPe,
+      outros: outrosBPe,
+      total: valorTotalBPe
+    });
 
     // 🔥 NOVO: Montar resposta como objeto para salvar no cache
     const responseData = {
@@ -286,7 +301,7 @@ export async function POST(req: NextRequest) {
       numeroSistema: primeiroBilhete.numeroSistema,
       poltrona: primeiroBilhete.poltrona,
       servico: primeiroBilhete.servico,
-      total: valorTotal,
+      total: valorTotalBPe,
       origemNome: primeiroBilhete.descOrigem || bloqueioRef.origem?.cidade,
       destinoNome: primeiroBilhete.descDestino || bloqueioRef.destino?.cidade,
       data: reservaData.data,

@@ -29,7 +29,7 @@ export async function enviarEmailBilheteAdmin(
 ): Promise<{ sucesso: boolean; erro?: string }> {
   
   if (!SMTP_PASS) {
-    console.error('❌ SMTP_PASS não configurada no .env');
+    console.error('SMTP_PASS não configurada no .env');
     return { sucesso: false, erro: 'Configuração de email incompleta' };
   }
 
@@ -48,9 +48,9 @@ export async function enviarEmailBilheteAdmin(
       },
     });
 
-    // 📧 Testar conexão
+    // Testar conexão
     await transporter.verify();
-    console.log('✅ Conexão SMTP verificada com sucesso!');
+    console.log('Conexão SMTP verificada com sucesso!');
 
     const htmlAdmin = `
 <!DOCTYPE html>
@@ -145,12 +145,12 @@ export async function enviarEmailBilheteAdmin(
 
     const nomeArquivo = `bilhete-${dados.localizador}.pdf`;
 
-    console.log(`📧 Enviando bilhete para admin: ${ADMIN_EMAIL}`);
+    console.log(`Enviando bilhete para admin: ${ADMIN_EMAIL}`);
     
     await transporter.sendMail({
       from: `"Good Trip Sistema" <${SMTP_USER}>`,
       to: ADMIN_EMAIL,
-      subject: `🎫 Bilhete ${dados.localizador} - ${dados.passageiro}`,
+      subject: `Bilhete ${dados.localizador} - ${dados.passageiro}`,
       html: htmlAdmin,
       attachments: [
         {
@@ -161,11 +161,11 @@ export async function enviarEmailBilheteAdmin(
       ],
     });
 
-    console.log('✅ Email enviado para admin com sucesso!');
+    console.log('Email enviado para admin com sucesso!');
     return { sucesso: true };
 
   } catch (error) {
-    console.error('❌ Erro ao enviar email:', error);
+    console.error('Erro ao enviar email:', error);
     return { 
       sucesso: false, 
       erro: error instanceof Error ? error.message : 'Erro desconhecido' 

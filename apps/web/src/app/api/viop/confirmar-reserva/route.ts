@@ -4,6 +4,7 @@ import { kv } from '@vercel/kv';
 import { estornarAutomatico } from '@/lib/estorno';
 import { enviarBilheteLinkWhatsApp } from '@/lib/evolution-whatsapp';
 import { notificarAdmin } from '@/lib/notificacoes-admin';
+import { enviarEmailBilheteAdmin } from '@/lib/enviar-email-bilhete';
 
 const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
@@ -105,7 +106,6 @@ type ConfirmacaoResponse = {
   customizacaoRodapeCupomDeEmbarque?: string;
 };
 
-// 🔥 NOVO: Tipo para resposta de categorias
 type CategoriaResponse = {
   orgaoConcedenteId?: number;
   orgaoConcedente?: {
@@ -121,6 +121,30 @@ type RequestBody = {
 
 export const dynamic = "force-dynamic";
 
+// 🔥 ADICIONAR ESTA FUNÇÃO AQUI (ANTES DO export async function POST)
+async function gerarPDFBilhete(orderId: string): Promise<Buffer | null> {
+  try {
+    console.log('📄 Gerando PDF do bilhete para envio por email...');
+    
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/viop/gerar-pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId }),
+    });
+
+    if (!response.ok) {
+      console.error('❌ Erro ao gerar PDF:', response.status);
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.error('❌ Erro ao gerar PDF para email:', error);
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   const bilhetesEmitidos: ConfirmacaoResponse[] = [];
   let orderId = '';
@@ -132,7 +156,6 @@ export async function POST(req: NextRequest) {
 
     console.log('📝 Iniciando emissão de bilhete:', { orderId, status });
 
-    // 🔥 NOVO: Verificar se já foi emitido (CACHE)
     const bilheteCache = await kv.get(`bilhete:${orderId}`);
     if (bilheteCache) {
       console.log('✅ Bilhete já emitido anteriormente (cache), retornando...');
@@ -156,13 +179,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 🔥 Processar múltiplos assentos com tratamento de erro
     console.log(`🎫 Processando ${reservaData.assentos.length} assento(s)...`);
     
     let primeiroBloqueioDados: BloqueioResponse | null = null;
     let orgaoConcedenteIdViagem: number | undefined;
     
-    // 🔥 NOVO: Buscar orgaoConcedenteId das categorias ANTES de processar
     try {
       console.log('🔍 Consultando categorias para obter orgaoConcedenteId...');
       const categorias = await consultarCategorias(reservaData);
@@ -170,7 +191,6 @@ export async function POST(req: NextRequest) {
       console.log(`✅ orgaoConcedenteId obtido: ${orgaoConcedenteIdViagem || 'não informado pela API'}`);
     } catch (error) {
       console.warn('⚠️ Não foi possível obter orgaoConcedenteId das categorias:', error);
-      // Continua sem o ID, não é crítico para emissão
     }
 
     for (let i = 0; i < reservaData.assentos.length; i++) {
@@ -190,7 +210,6 @@ export async function POST(req: NextRequest) {
 
         console.log(`✅ Assento ${assento} bloqueado! Transacao: ${bloqueio.transacao}`);
 
-        // 🔥 Usar dados do passageiro correto para este assento
         const passageiroAssento = reservaData.passageiros.find(p => p.assento === assento) || reservaData.passageiros[i];
 
         console.log(`💳 Confirmando venda do assento ${assento}...`);
@@ -207,7 +226,6 @@ export async function POST(req: NextRequest) {
         const mensagemErro = erroAssento instanceof Error ? erroAssento.message : 'Erro desconhecido';
         console.error(`❌ Erro ao processar assento ${assento}:`, mensagemErro);
         
-        // 🔥 Notificar admin sobre erro
         notificarAdmin({
           tipo: 'ERRO_EMISSAO',
           orderId,
@@ -219,7 +237,6 @@ export async function POST(req: NextRequest) {
           detalhes: mensagemErro
         }).catch(console.error);
         
-        // 🔥 ESTORNO AUTOMÁTICO
         console.log(`\n💸 Iniciando estorno automático...`);
         console.log(`📊 Situação: ${bilhetesEmitidos.length} de ${reservaData.assentos.length} bilhetes emitidos`);
         
@@ -269,13 +286,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ✅ Todos os bilhetes foram emitidos com sucesso
     console.log(`\n✅ Todos os ${bilhetesEmitidos.length} bilhetes foram emitidos com sucesso!`);
 
     const primeiroBilhete = bilhetesEmitidos[0];
     const bloqueioRef = primeiroBloqueioDados!;
 
-    // 🔥 Calcular valor total REAL da BPe (não usar reservaData.preco que tem taxa administrativa)
     const tarifaBPe = parseFloat(primeiroBilhete.bpe?.tarifa || '0');
     const pedagogioBPe = parseFloat(primeiroBilhete.bpe?.pedagio || '0');
     const taxaEmbarqueBPe = parseFloat(primeiroBilhete.bpe?.taxaEmbarque || '0');
@@ -293,7 +308,6 @@ export async function POST(req: NextRequest) {
       total: valorTotalBPe
     });
 
-    // 🔥 NOVO: Montar resposta como objeto para salvar no cache
     const responseData = {
       localizador: primeiroBilhete.localizador,
       status: 'CONFIRMADO',
@@ -318,9 +332,7 @@ export async function POST(req: NextRequest) {
         documento: primeiroBilhete.documento,
         email: reservaData.passageiros[0]?.email || '',
       },
-      // 🔥 NOVO: Array completo de passageiros para os bilhetes
       passageiros: reservaData.passageiros,
-      // 🔥 NOVO: Dados específicos de cada bilhete emitido
       bilhetes: bilhetesEmitidos.map((bilhete, idx) => ({
         assento: bilhetesEmitidos[idx].poltrona,
         localizador: bilhete.localizador,
@@ -349,18 +361,53 @@ export async function POST(req: NextRequest) {
       cabecalhoEmitente: primeiroBilhete.bpe?.cabecalhoEmitente,
       dataHoraEmbarqueInicio: primeiroBilhete.bpe?.dataHoraEmbarqueInicio,
       dataHoraEmbarqueFim: primeiroBilhete.bpe?.dataHoraEmbarqueFim,
-      // 🔥 PRIORIDADE: orgaoConcedenteId das categorias > confirmarVenda
       orgaoConcedenteId: orgaoConcedenteIdViagem || primeiroBilhete.orgaoConcedenteId,
       customizacaoRodapeCupomDeEmbarque: primeiroBilhete.bpe?.customizacaoRodapeCupomDeEmbarque,
       _teste: false,
     };
 
-    // 🔥 NOVO: Salvar no cache (30 dias = 2592000 segundos)
     await kv.set(`bilhete:${orderId}`, responseData, { ex: 2592000 });
     console.log('💾 Bilhete salvo no cache para futuras consultas');
 
-    // 🔥 NOVO: Enviar bilhete PDF via WhatsApp (não bloqueia resposta)
+    // 🔥 ADICIONAR TODO ESTE BLOCO AQUI (LOGO APÓS SALVAR NO CACHE)
     const primeiroPassageiro = reservaData.passageiros[0];
+    
+    // 📧 ENVIAR EMAIL PARA ADMIN (não bloqueia resposta)
+    (async () => {
+      try {
+        console.log('📧 Iniciando envio de bilhete para admin...');
+        
+        const pdfBuffer = await gerarPDFBilhete(orderId);
+        
+        if (!pdfBuffer) {
+          console.error('⚠️ Não foi possível gerar PDF para envio por email');
+          return;
+        }
+
+        const resultado = await enviarEmailBilheteAdmin(pdfBuffer, {
+          localizador: responseData.localizador || '',
+          numeroBilhete: responseData.numeroBilhete || '',
+          origem: responseData.origemNome || '',
+          destino: responseData.destinoNome || '',
+          data: responseData.dataFormatada || '',
+          horario: responseData.horarioSaida || '',
+          assentos: responseData.assentos,
+          passageiro: primeiroPassageiro?.nomeCompleto || '',
+          emailCliente: primeiroPassageiro?.email || '',
+          valor: responseData.total,
+        });
+
+        if (resultado.sucesso) {
+          console.log('✅ Email com bilhete enviado para admin!');
+        } else {
+          console.error('⚠️ Erro ao enviar email:', resultado.erro);
+        }
+      } catch (error) {
+        console.error('⚠️ Erro ao enviar bilhete por email (não crítico):', error);
+      }
+    })();
+
+    // 📱 ENVIAR WHATSAPP (continua igual)
     if (primeiroPassageiro?.telefone) {
       (async () => {
         try {
@@ -383,7 +430,6 @@ export async function POST(req: NextRequest) {
       console.log('📱 Enviando link do bilhete via WhatsApp...');
     }
 
-    // 🔥 Notificar admin sobre bilhete emitido com sucesso
     notificarAdmin({
       tipo: 'BILHETE_EMITIDO',
       orderId,
@@ -400,7 +446,6 @@ export async function POST(req: NextRequest) {
     const mensagemErro = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('❌ Erro fatal ao confirmar reserva:', mensagemErro);
     
-    // 🔥 Notificar admin sobre erro fatal
     if (orderId) {
       notificarAdmin({
         tipo: 'ERRO_EMISSAO',
@@ -410,7 +455,6 @@ export async function POST(req: NextRequest) {
       }).catch(console.error);
     }
     
-    // 🔥 ESTORNO AUTOMÁTICO em caso de erro fatal
     if (orderId && bilhetesEmitidos.length > 0) {
       console.log(`\n💸 Erro fatal - Iniciando estorno automático...`);
       
@@ -441,7 +485,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// 🔥 NOVA FUNÇÃO: Consultar categorias para obter orgaoConcedenteId
 async function consultarCategorias(reserva: ReservaData): Promise<CategoriaResponse> {
   const url = `${VIOP_BASE}/categoria/consultarCategoriasCorrida`;
   

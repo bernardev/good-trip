@@ -64,7 +64,7 @@ export default function GestãoBilhetesPage() {
       if (data.success) {
         setMensagem({
           tipo: 'sucesso',
-          texto: `Email reenviado com sucesso para ${passageiroNome}!`,
+          texto: `Email reenviado com sucesso!`,
         });
       } else {
         setMensagem({

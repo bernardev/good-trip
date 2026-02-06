@@ -37,6 +37,7 @@ type BilheteResumido = {
   destino: string;
   data: string;
   dataEmissao: string; // quando foi emitido
+  timestampEmissao: number; // para ordenação
   assentos: string[];
   valor: number;
 };
@@ -45,11 +46,11 @@ export async function GET() {
   try {
     console.log('Listando bilhetes do cache KV...');
 
-    // 🔥 Listar todas as chaves que começam com "bilhete:"
+    // Listar todas as chaves que começam com "bilhete:"
     const keys = await kv.keys('bilhete:*');
 
     if (!keys || keys.length === 0) {
-      console.log('⚠️ Nenhum bilhete encontrado no cache');
+      console.log('Nenhum bilhete encontrado no cache');
       return NextResponse.json({
         success: true,
         bilhetes: [],
@@ -59,10 +60,14 @@ export async function GET() {
 
     console.log(`Encontradas ${keys.length} chaves de bilhetes`);
 
-    // 🔥 Buscar dados de cada bilhete
+    // Buscar dados de cada bilhete com TTL
     const bilhetesPromises = keys.map(async (key) => {
       try {
-        const data = await kv.get(key);
+        // Buscar dados e TTL
+        const [data, ttl] = await Promise.all([
+          kv.get(key),
+          kv.ttl(key) // Tempo restante em segundos
+        ]);
         
         if (!data) return null;
 
@@ -83,9 +88,12 @@ export async function GET() {
                      bilhete.passageiro?.email || 
                      'Não informado';
 
-        // Data de emissão (aproximada - quando foi salvo no cache)
-        // Como não temos, vamos usar a data da viagem
-        const dataEmissao = bilhete.data || new Date().toISOString();
+        // Calcular timestamp de emissão baseado no TTL
+        // TTL máximo é 30 dias (2592000 segundos)
+        const ttlMaximo = 2592000;
+        const segundosPassados = ttlMaximo - (ttl || 0);
+        const timestampEmissao = Date.now() - (segundosPassados * 1000);
+        const dataEmissao = new Date(timestampEmissao).toISOString();
 
         const resumido: BilheteResumido = {
           orderId,
@@ -98,6 +106,7 @@ export async function GET() {
           destino: bilhete.destinoNome || '',
           data: bilhete.dataFormatada || '',
           dataEmissao,
+          timestampEmissao,
           assentos: bilhete.assentos || [],
           valor: bilhete.total || 0,
         };
@@ -112,14 +121,10 @@ export async function GET() {
     const bilhetes = (await Promise.all(bilhetesPromises))
       .filter((b): b is BilheteResumido => b !== null);
 
-    // Ordenar por data de emissão (mais recentes primeiro)
-    bilhetes.sort((a, b) => {
-      const dataA = new Date(a.dataEmissao).getTime();
-      const dataB = new Date(b.dataEmissao).getTime();
-      return dataB - dataA; // Decrescente
-    });
+    // 🔥 Ordenar por timestamp de emissão (mais recentes primeiro)
+    bilhetes.sort((a, b) => b.timestampEmissao - a.timestampEmissao);
 
-    console.log(`${bilhetes.length} bilhetes processados e ordenados`);
+    console.log(`${bilhetes.length} bilhetes processados e ordenados por data de emissão`);
 
     return NextResponse.json({
       success: true,
@@ -128,7 +133,7 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error('Erro ao listar bilhetes:', error);
+    console.error('❌ Erro ao listar bilhetes:', error);
     return NextResponse.json(
       { 
         error: 'Erro ao listar bilhetes',

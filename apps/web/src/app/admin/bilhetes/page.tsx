@@ -116,162 +116,186 @@ export default function GestãoBilhetesPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gestão de Bilhetes</h1>
-          <p className="text-gray-600 mt-1">
-            {bilhetes.length} bilhete(s) encontrado(s) no sistema
-          </p>
-        </div>
-
-        <button
-          onClick={carregarBilhetes}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Atualizar
-        </button>
-      </div>
-
-      {/* Mensagem de feedback */}
-      {mensagem && (
-        <div
-          className={`mb-6 p-4 rounded-lg ${
-            mensagem.tipo === 'sucesso'
-              ? 'bg-green-50 text-green-800 border border-green-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
-          }`}
-        >
-          {mensagem.texto}
-        </div>
-      )}
-
-      {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <span className="ml-3 text-gray-600">Carregando bilhetes...</span>
-        </div>
-      )}
-
-      {/* Tabela */}
-      {!loading && bilhetes.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <p className="text-gray-600">Nenhum bilhete encontrado no sistema.</p>
-        </div>
-      )}
-
-      {!loading && bilhetes.length > 0 && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Passageiro
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contato
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Viagem
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Data
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Assentos
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Valor
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {bilhetes.map((bilhete) => (
-                  <tr key={bilhete.orderId} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {bilhete.passageiroNome}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {bilhete.localizador}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{bilhete.telefone}</div>
-                      <div className="text-sm text-gray-500">{bilhete.email}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {bilhete.origem} → {bilhete.destino}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{bilhete.data}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {bilhete.assentos.join(', ')}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        R$ {bilhete.valor.toFixed(2)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        {/* Botão Email */}
-                        <button
-                          onClick={() => reenviarEmail(bilhete.orderId, bilhete.passageiroNome)}
-                          disabled={enviandoEmail === bilhete.orderId}
-                          className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          title="Reenviar email para admin"
-                        >
-                          {enviandoEmail === bilhete.orderId ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Mail className="w-4 h-4" />
-                          )}
-                        </button>
-
-                        {/* Botão WhatsApp */}
-                        <button
-                          onClick={() =>
-                            reenviarWhatsApp(
-                              bilhete.orderId,
-                              bilhete.telefone,
-                              bilhete.passageiroNome
-                            )
-                          }
-                          disabled={enviandoWhatsApp === bilhete.orderId}
-                          className="inline-flex items-center px-3 py-2 border border-green-300 rounded-md text-sm font-medium text-green-700 bg-white hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          title="Reenviar WhatsApp para cliente"
-                        >
-                          {enviandoWhatsApp === bilhete.orderId ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <MessageCircle className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-[1600px] mx-auto p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Gestão de Bilhetes</h1>
+            <p className="text-gray-600 mt-1">
+              {bilhetes.length} bilhete(s) encontrado(s) no sistema
+            </p>
           </div>
+
+          <button
+            onClick={carregarBilhetes}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
         </div>
-      )}
+
+        {/* Mensagem de feedback */}
+        {mensagem && (
+          <div
+            className={`mb-6 p-4 rounded-lg ${
+              mensagem.tipo === 'sucesso'
+                ? 'bg-green-50 text-green-800 border border-green-200'
+                : 'bg-red-50 text-red-800 border border-red-200'
+            }`}
+          >
+            {mensagem.texto}
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center py-12 bg-white rounded-lg shadow">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <span className="ml-3 text-gray-600">Carregando bilhetes...</span>
+          </div>
+        )}
+
+        {/* Vazio */}
+        {!loading && bilhetes.length === 0 && (
+          <div className="text-center py-12 bg-white rounded-lg shadow">
+            <p className="text-gray-600">Nenhum bilhete encontrado no sistema.</p>
+          </div>
+        )}
+
+        {/* Tabela */}
+        {!loading && bilhetes.length > 0 && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Passageiro
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Contato
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Viagem
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Data
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Assentos
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Valor
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {bilhetes.map((bilhete) => (
+                    <tr key={bilhete.orderId} className="hover:bg-gray-50 transition-colors">
+                      {/* Passageiro */}
+                      <td className="px-4 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
+                            {bilhete.passageiroNome}
+                          </span>
+                          <span className="text-xs text-gray-500 mt-0.5">
+                            {bilhete.localizador}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Contato */}
+                      <td className="px-4 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm text-gray-900 whitespace-nowrap">
+                            {bilhete.telefone}
+                          </span>
+                          <span className="text-xs text-gray-500 mt-0.5 truncate max-w-[180px]" title={bilhete.email}>
+                            {bilhete.email}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Viagem */}
+                      <td className="px-4 py-4">
+                        <span className="text-sm text-gray-900 whitespace-nowrap">
+                          {bilhete.origem} → {bilhete.destino}
+                        </span>
+                      </td>
+
+                      {/* Data */}
+                      <td className="px-4 py-4">
+                        <span className="text-sm text-gray-900 whitespace-nowrap">
+                          {bilhete.data}
+                        </span>
+                      </td>
+
+                      {/* Assentos */}
+                      <td className="px-4 py-4">
+                        <span className="text-sm text-gray-900 whitespace-nowrap">
+                          {bilhete.assentos.join(', ')}
+                        </span>
+                      </td>
+
+                      {/* Valor */}
+                      <td className="px-4 py-4">
+                        <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
+                          R$ {bilhete.valor.toFixed(2)}
+                        </span>
+                      </td>
+
+                      {/* Ações */}
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          {/* Botão Email */}
+                          <button
+                            onClick={() => reenviarEmail(bilhete.orderId, bilhete.passageiroNome)}
+                            disabled={enviandoEmail === bilhete.orderId}
+                            className="inline-flex items-center justify-center w-9 h-9 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            title="Reenviar email para admin"
+                          >
+                            {enviandoEmail === bilhete.orderId ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Mail className="w-4 h-4" />
+                            )}
+                          </button>
+
+                          {/* Botão WhatsApp */}
+                          <button
+                            onClick={() =>
+                              reenviarWhatsApp(
+                                bilhete.orderId,
+                                bilhete.telefone,
+                                bilhete.passageiroNome
+                              )
+                            }
+                            disabled={enviandoWhatsApp === bilhete.orderId}
+                            className="inline-flex items-center justify-center w-9 h-9 border border-green-300 rounded-md text-green-700 bg-white hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            title="Reenviar WhatsApp para cliente"
+                          >
+                            {enviandoWhatsApp === bilhete.orderId ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <MessageCircle className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

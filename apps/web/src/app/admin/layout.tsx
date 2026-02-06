@@ -10,6 +10,7 @@ export const metadata = { title: "Admin — GoodTrip" };
 
 const NAV = [
   { href: "/admin",         label: "Dashboard" },
+  { href: "/admin/bilhetes", label: "Bilhetes" },
   { href: "/admin/reemitir", label: "Reemitir Bilhete" },
   { href: "/admin/banner",  label: "Banner" },
   { href: "/admin/offers",  label: "Ofertas" },

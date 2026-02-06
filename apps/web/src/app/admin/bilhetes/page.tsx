@@ -85,7 +85,7 @@ export default function GestãoBilhetesPage() {
       setEnviandoWhatsApp(orderId);
       setMensagem(null);
 
-      const response = await fetch('/api/viop/reenviar-whatsapp', {
+      const response = await fetch('/api/viop/enviar-whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, telefone }),

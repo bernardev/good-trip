@@ -22,7 +22,7 @@ async function gerarPDFBilhete(orderId: string): Promise<Buffer | null> {
   try {
     console.log('📄 Gerando PDF do bilhete para reenvio...');
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/viop/gerar-pdf`, {
+    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/viop/gerar-pdf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId }),

@@ -52,13 +52,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('📧 Iniciando reenvio de email para:', orderId);
+    console.log('Iniciando reenvio de email para:', orderId);
 
     // Buscar dados do bilhete no cache
     const bilheteCache = await kv.get(`bilhete:${orderId}`);
 
     if (!bilheteCache) {
-      console.error('❌ Bilhete não encontrado no cache:', orderId);
+      console.error('Bilhete não encontrado no cache:', orderId);
       return NextResponse.json(
         { error: 'Bilhete não encontrado' },
         { status: 404 }
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       ? JSON.parse(bilheteCache) 
       : bilheteCache as BilheteCache;
 
-    console.log('✅ Dados do bilhete encontrados:', {
+    console.log('Dados do bilhete encontrados:', {
       localizador: bilhete.localizador,
       passageiro: bilhete.passageiro?.nome
     });
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('✅ PDF gerado com sucesso');
+    console.log('PDF gerado com sucesso');
 
     // Enviar email
     const resultado = await enviarEmailBilheteAdmin(pdfBuffer, {
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('✅ Email reenviado com sucesso!');
+    console.log('Email reenviado com sucesso!');
 
     return NextResponse.json({
       success: true,
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Erro ao reenviar email:', error);
+    console.error('Erro ao reenviar email:', error);
     return NextResponse.json(
       { 
         error: 'Erro ao reenviar email',

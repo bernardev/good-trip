@@ -40,6 +40,7 @@ export function getObservacaoRota(
     return {
       texto: 'Embarque em Miritituba',
       tipo: 'embarque',
+      icone: '📍'
     };
   }
 
@@ -60,6 +61,7 @@ export function getObservacaoRota(
     return {
       texto: 'Desembarque em Miritituba',
       tipo: 'desembarque',
+      icone: '📍'
     };
   }
 

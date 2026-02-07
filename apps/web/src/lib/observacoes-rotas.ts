@@ -23,13 +23,13 @@ export function getObservacaoRota(
     ? horarioSaida.split('T')[1].substring(0, 5)
     : horarioSaida.substring(0, 5);
 
-  // 🔥 ITAITUBA → SANTARÉM
+  // ITAITUBA → SANTARÉM
   if (
     (origemNorm.includes('ITAITUBA') && destinoNorm.includes('SANTAREM')) ||
     (origemNorm.includes('ITAITUBA') && destinoNorm.includes('SANTARÉM'))
   ) {
     // Horários que embarcam na RODOVIÁRIA DE ITAITUBA
-    if (horario === '14:30' || horario === '22:30') {
+    if (horario === '06:30' || horario === '14:30' || horario === '22:30') {
       return {
         texto: 'Embarque na Rodoviária de Itaituba',
         tipo: 'embarque',

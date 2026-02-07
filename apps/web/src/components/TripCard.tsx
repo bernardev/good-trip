@@ -75,8 +75,8 @@ function getAmenityIcon(amenity: string) {
 function getBusTypeLabel(busType?: string): string {
   if (!busType) return 'Convencional';
   const type = busType.toLowerCase();
-  if (type.includes('leito')) return 'Leito';
   if (type.includes('semi') || type.includes('semileito')) return 'Semi-Leito';
+  if (type.includes('leito')) return 'Leito';
   if (type.includes('executivo')) return 'Executivo';
   if (type.includes('conexao') || type.includes('conexão')) return 'Conexão';
   return 'Convencional';

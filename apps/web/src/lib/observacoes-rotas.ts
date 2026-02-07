@@ -33,7 +33,6 @@ export function getObservacaoRota(
       return {
         texto: 'Embarque na Rodoviária de Itaituba',
         tipo: 'embarque',
-        icone: '🚏'
       };
     }
     
@@ -41,7 +40,6 @@ export function getObservacaoRota(
     return {
       texto: 'Embarque em Miritituba',
       tipo: 'embarque',
-      icone: '📍'
     };
   }
 
@@ -51,11 +49,10 @@ export function getObservacaoRota(
     (origemNorm.includes('SANTARÉM') && destinoNorm.includes('ITAITUBA'))
   ) {
     // Horários que desembarcam na RODOVIÁRIA DE ITAITUBA
-    if (horario === '13:00' || horario === '22:31') {
+    if (horario === '13:00' || horario === '18:00' || horario === '22:31') {
       return {
         texto: 'Desembarque na Rodoviária de Itaituba',
         tipo: 'desembarque',
-        icone: '🚏'
       };
     }
     
@@ -63,7 +60,6 @@ export function getObservacaoRota(
     return {
       texto: 'Desembarque em Miritituba',
       tipo: 'desembarque',
-      icone: '📍'
     };
   }
 

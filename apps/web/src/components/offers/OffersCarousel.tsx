@@ -3,13 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useGeo } from "@/hooks/useGeo";
 
-/* Tipos mínimos do público /api/settings */
 type OfferItem = {
   id: string;
   from: string;
   to: string;
+  fromId: string;
+  toId: string;
   priceCents: number;
   img?: string;
   active?: boolean;
@@ -19,97 +19,62 @@ type Settings = {
   offers?: OfferItem[];
 };
 
-/* Tipos internos do carrossel */
-type Offer = { id: string; from: string; to: string; priceCents: number; img: string };
-
-type NearbyApiResp = { origin_city: string; origin_lat: number; origin_lng: number; label: string };
-type PopularItem = { city: string; uf: string; fromCents: number };
-type PopularApiResp = { items: PopularItem[] };
+type Offer = { 
+  id: string; 
+  from: string; 
+  to: string; 
+  fromId: string;
+  toId: string;
+  priceCents: number; 
+  img: string;
+};
 
 const DEFAULT_IMG = "/logo-goodtrip.jpeg";
-
-/* Fallback básico */
-const FALLBACK: Offer[] = [
-  { id: "cwb-joi", from: "Curitiba, PR", to: "Joinville, SC",         priceCents: 4399,  img: DEFAULT_IMG },
-  { id: "cwb-fln", from: "Curitiba, PR", to: "Florianópolis, SC",     priceCents: 4499,  img: DEFAULT_IMG },
-  { id: "cwb-sp",  from: "Curitiba, PR", to: "São Paulo - Tietê, SP", priceCents: 4899,  img: DEFAULT_IMG },
-  { id: "cwb-poa", from: "Curitiba, PR", to: "Porto Alegre, RS",      priceCents: 11299, img: DEFAULT_IMG },
-];
 
 export default function OffersCarousel() {
   const trackRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
   const [active, setActive] = useState(0);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const geo = useGeo();
-  const [offers, setOffers] = useState<Offer[]>(FALLBACK);
-  const [hasAdminOffers, setHasAdminOffers] = useState(false);
-
-  /* 1) Tenta carregar do admin (/api/settings) */
   useEffect(() => {
     (async () => {
       try {
+        setLoading(true);
         const r = await fetch("/api/settings", { cache: "no-store" });
-        if (!r.ok) throw new Error("settings_failed");
+        
+        if (!r.ok) {
+          console.error("Erro ao buscar ofertas");
+          setOffers([]);
+          return;
+        }
+
         const s: Settings = await r.json();
 
         const list = (s?.offers ?? [])
           .filter((o) => (o.active ?? true) && o.from && o.to && Number.isFinite(o.priceCents))
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.id).localeCompare(String(b.id)))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
           .map<Offer>((o) => ({
             id: String(o.id),
             from: o.from,
             to: o.to,
+            fromId: o.fromId,
+            toId: o.toId,
             priceCents: o.priceCents,
-            img: DEFAULT_IMG, // sempre padrão Good Trip
+            img: DEFAULT_IMG,
           }));
 
-        if (list.length) {
-          setOffers(list);
-          setHasAdminOffers(true);
-        } else {
-          setHasAdminOffers(false);
-        }
-      } catch {
-        setHasAdminOffers(false);
+        setOffers(list);
+      } catch (error) {
+        console.error("Erro ao carregar ofertas:", error);
+        setOffers([]);
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
 
-  /* 2) Se não houver admin, usa geo+popular */
-  useEffect(() => {
-    if (hasAdminOffers) return;
-    if (!geo) return;
-
-    (async () => {
-      try {
-        const r1 = await fetch(`/api/distribusion/nearby?lat=${geo.lat}&lng=${geo.lng}`);
-        const j1: NearbyApiResp = await r1.json();
-        if (!r1.ok) throw new Error("nearby_failed");
-
-        const r2 = await fetch(
-          `/api/distribusion/popular?origin_lat=${j1.origin_lat}&origin_lng=${j1.origin_lng}&days=14&max=8`
-        );
-        const j2: PopularApiResp = await r2.json();
-        if (!r2.ok || !Array.isArray(j2.items)) throw new Error("popular_failed");
-
-        const fromLabel = j1.label; // ex.: “Curitiba, PR”
-        const list: Offer[] = j2.items.map((x, idx) => ({
-          id: `${j1.origin_city}-${idx}`,
-          from: fromLabel,
-          to: `${x.city}${x.uf ? `, ${x.uf}` : ""}`,
-          priceCents: x.fromCents,
-          img: DEFAULT_IMG,
-        }));
-
-        setOffers(list.length ? list : FALLBACK);
-      } catch {
-        setOffers(FALLBACK);
-      }
-    })();
-  }, [geo, hasAdminOffers]);
-
-  /* centraliza index */
   const scrollToIndex = (idx: number) => {
     const track = trackRef.current;
     const card = cardRefs.current[idx];
@@ -118,7 +83,6 @@ export default function OffersCarousel() {
     track.scrollTo({ left: target, behavior: "smooth" });
   };
 
-  /* coverflow leve + item ativo */
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;
@@ -136,7 +100,7 @@ export default function OffersCarousel() {
           bestDist = d;
           best = i;
         }
-        const n = Math.min(1, d / (track.clientWidth * 0.6)); // 0..1
+        const n = Math.min(1, d / (track.clientWidth * 0.6));
         const rot = (mid < center ? 1 : -1) * 12 * n;
         const scale = 1 - 0.15 * n;
         card.style.transform = `perspective(900px) rotateY(${rot}deg) scale(${scale})`;
@@ -154,10 +118,20 @@ export default function OffersCarousel() {
       track.removeEventListener("scroll", onScroll);
       ro.disconnect();
     };
-  }, []);
+  }, [offers]);
 
   const goPrev = () => scrollToIndex(Math.max(0, active - 1));
   const goNext = () => scrollToIndex(Math.min(offers.length - 1, active + 1));
+
+  // Gerar link de busca
+  const gerarLinkBusca = (oferta: Offer): string => {
+    const hoje = new Date().toISOString().split('T')[0];
+    return `/buscar-teste?origem=${oferta.fromId}&destino=${oferta.toId}&data=${hoje}&tipo=oneway`;
+  };
+
+  if (!loading && offers.length === 0) {
+    return null;
+  }
 
   return (
     <section className="mx-auto max-w-7xl px-4 md:px-8 py-12">
@@ -174,74 +148,85 @@ export default function OffersCarousel() {
         </Link>
       </div>
 
-      <div className="relative">
-        {/* Setas */}
-        <button
-          onClick={goPrev}
-          aria-label="Anterior"
-          className="grid absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white shadow-soft border border-cloud place-items-center hover:bg-cloud/30 z-10"
-        >
-          ‹
-        </button>
-        <button
-          onClick={goNext}
-          aria-label="Próximo"
-          className="grid absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white shadow-soft border border-cloud place-items-center hover:bg-cloud/30 z-10"
-        >
-          ›
-        </button>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+          <p className="ml-3 text-sm text-slate-600">Carregando ofertas...</p>
+        </div>
+      ) : (
+        <div className="relative">
+          {offers.length > 1 && (
+            <>
+              <button
+                onClick={goPrev}
+                aria-label="Anterior"
+                className="grid absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white shadow-soft border border-cloud place-items-center hover:bg-cloud/30 z-10"
+              >
+                ‹
+              </button>
+              <button
+                onClick={goNext}
+                aria-label="Próximo"
+                className="grid absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white shadow-soft border border-cloud place-items-center hover:bg-cloud/30 z-10"
+              >
+                ›
+              </button>
+            </>
+          )}
 
-        {/* Trilha */}
-        <div
-          ref={trackRef}
-          className="no-scrollbar flex gap-6 overflow-x-auto snap-x snap-mandatory scroll-smooth py-2"
-          tabIndex={0}
-        >
-          {offers.map((o, i) => (
-            <article
-              key={o.id}
-              ref={(el) => {
-                cardRefs.current[i] = el;
-              }}
-              className="snap-center shrink-0 w-[80%] sm:w-[58%] md:w-[38%] lg:w-[28%] rounded-2xl border border-cloud bg-white shadow-soft transition-transform duration-300 gb tilt"
-            >
-              <div className="relative h-44">
-                <Image src={o.img} alt="" fill className="object-contain bg-white" />
-                <div className="absolute left-3 top-3 rounded bg-accent text-ink text-xs font-semibold px-2 py-1 shadow">
-                  % OFERTA
-                </div>
-              </div>
-              <div className="p-4">
-                <div className="text-sm text-ink/70">{o.from}</div>
-                <div className="mt-1 font-semibold text-[17px] text-ink">{o.to}</div>
-                <div className="mt-3">
-                  <div className="text-xs text-ink/60 mb-1">A partir de</div>
-                  <div className="leading-none">
-                    <span className="text-3xl md:text-4xl font-extrabold">
-                      {(o.priceCents / 100).toFixed(2).replace(".", ",")}
-                    </span>
+          <div
+            ref={trackRef}
+            className="no-scrollbar flex gap-6 overflow-x-auto snap-x snap-mandatory scroll-smooth py-2"
+            tabIndex={0}
+          >
+            {offers.map((o, i) => (
+              <Link
+                key={o.id}
+                href={gerarLinkBusca(o)}
+                ref={(el) => {
+                  cardRefs.current[i] = el;
+                }}
+                className="snap-center shrink-0 w-[80%] sm:w-[58%] md:w-[38%] lg:w-[28%] rounded-2xl border border-cloud bg-white shadow-soft transition-all duration-300 hover:shadow-xl hover:scale-105 cursor-pointer group"
+              >
+                <div className="relative h-44">
+                  <Image src={o.img} alt="" fill className="object-contain bg-white" />
+                  <div className="absolute left-3 top-3 rounded bg-accent text-ink text-xs font-semibold px-2 py-1 shadow">
+                    % OFERTA
                   </div>
                 </div>
-              </div>
-            </article>
-          ))}
-        </div>
+                <div className="p-4">
+                  <div className="text-sm text-ink/70">{o.from}</div>
+                  <div className="mt-1 font-semibold text-[17px] text-ink group-hover:text-primary transition-colors">{o.to}</div>
+                  <div className="mt-3">
+                    <div className="text-xs text-ink/60 mb-1">A partir de</div>
+                    <div className="leading-none">
+                      <span className="text-3xl md:text-4xl font-extrabold group-hover:text-primary transition-colors">
+                        R$ {(o.priceCents / 100).toFixed(2).replace(".", ",")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
 
-        {/* Dots */}
-        <div className="mt-4 flex items-center justify-center gap-3">
-          {offers.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => scrollToIndex(i)}
-              aria-label={`Ir para slide ${i + 1}`}
-              aria-current={i === active}
-              className={`h-2.5 rounded-full transition-all duration-300 ${
-                i === active ? "w-8 bg-primary" : "w-2.5 bg-cloud"
-              }`}
-            />
-          ))}
+          {offers.length > 1 && (
+            <div className="mt-4 flex items-center justify-center gap-3">
+              {offers.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => scrollToIndex(i)}
+                  aria-label={`Ir para slide ${i + 1}`}
+                  aria-current={i === active}
+                  className={`h-2.5 rounded-full transition-all duration-300 ${
+                    i === active ? "w-8 bg-primary" : "w-2.5 bg-cloud"
+                  }`}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </section>
   );
 }

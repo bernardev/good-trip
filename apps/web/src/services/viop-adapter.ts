@@ -84,7 +84,6 @@ export class ViopAdapter {
     passengers: number;
   }): Promise<UnifiedTrip[]> {
     try {
-      console.log('🔍 [VIOP] Buscando:', params);
       const baseUrl = this.getBaseUrl();
 
       // 1) Corridas (lista de serviços)
@@ -92,7 +91,6 @@ export class ViopAdapter {
         `${baseUrl}/api/viop/corridas?origemId=${encodeURIComponent(params.departureCity)}` +
         `&destinoId=${encodeURIComponent(params.arrivalCity)}&data=${params.departureDate}`;
 
-      console.log('🔗 [VIOP] Buscando corridas:', corridasUrl);
 
       const corridasResponse = await fetch(corridasUrl, {
         method: 'GET',
@@ -105,11 +103,9 @@ export class ViopAdapter {
       }
 
       const corridasData: ViopCorridasResponse = await corridasResponse.json();
-      console.log('📦 [VIOP] Corridas encontradas:', corridasData.total);
 
       const lista = corridasData.corridas ?? [];
       if (lista.length === 0) {
-        console.log('⚠️ [VIOP] Nenhuma corrida encontrada');
         return [];
       }
 
@@ -128,7 +124,6 @@ export class ViopAdapter {
           `&destinoId=${encodeURIComponent(params.arrivalCity)}` +
           `&data=${params.departureDate}&servico=${encodeURIComponent(servicoId)}`;
 
-        console.log('🔗 [VIOP] Buscando detalhes:', onibusUrl);
 
         try {
           const onibusResponse = await fetch(onibusUrl, {
@@ -168,7 +163,6 @@ export class ViopAdapter {
         (t): t is UnifiedTrip => t !== null
       );
 
-      console.log(`✅ [VIOP] ${trips.length} viagens processadas com sucesso`);
       return trips;
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Erro desconhecido';

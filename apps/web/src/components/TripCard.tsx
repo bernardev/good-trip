@@ -211,7 +211,6 @@ export function TripCard({ trip, onSelect }: TripCardProps) {
       const endpoint = isConexao ? '/api/viop/onibus-trecho' : '/api/viop/onibus';
       const url = `${endpoint}?servico=${servico}&origemId=${origem}&destinoId=${destino}&data=${dataViagem}`;
       
-      console.log(`🔍 Buscando assentos [${index}]:`, url);
       
       const response = await fetch(url);
 

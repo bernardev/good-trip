@@ -27,6 +27,7 @@ type ReservaData = {
   origem?: string;
   destino?: string;
   data?: string;
+  dataCorrida?: string;
   assentos: string[];
   passageiros: Passageiro[];
   preco: number;
@@ -100,6 +101,7 @@ type RequestBody = {
     origem?: string;
     destino?: string;
     data?: string;
+    dataCorrida?: string
     assentos?: string[];
     passageiros?: Passageiro[];
   };
@@ -153,6 +155,7 @@ export async function POST(request: NextRequest) {
       origem: booking?.origem,
       destino: booking?.destino,
       data: booking?.data,
+      dataCorrida: booking?.dataCorrida,
       assentos: booking?.assentos || [],
       passageiros: booking?.passageiros || [],
       preco: amount / 100,

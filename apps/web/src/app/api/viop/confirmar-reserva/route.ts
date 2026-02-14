@@ -25,6 +25,7 @@ type ReservaData = {
   origem: string;
   destino: string;
   data: string;
+  dataCorrida?: string;
   assentos: string[];
   passageiros: Passageiro[];
   preco: number;
@@ -491,7 +492,7 @@ async function consultarCategorias(reserva: ReservaData): Promise<CategoriaRespo
   const payload = {
     origem: parseInt(reserva.origem),
     destino: parseInt(reserva.destino),
-    data: reserva.data,
+    data: reserva.dataCorrida || reserva.data,
     servico: parseInt(reserva.servico),
   };
 

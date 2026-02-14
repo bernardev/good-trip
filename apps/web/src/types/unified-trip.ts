@@ -57,6 +57,8 @@ export interface UnifiedTrip {
   // 🔥 NOVO: Dados de conexão (se for viagem com baldeação)
   conexao?: ConexaoNormalizada;
 
+
+  dataCorrida?: string;
   // Dados originais (preservar para debugging)
   rawData: DistribusionConnection | ViopTrip;
 }

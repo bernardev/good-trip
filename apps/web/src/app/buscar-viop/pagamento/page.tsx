@@ -368,20 +368,32 @@ function PagamentoContent() {
     return options;
   }, [totalSemJuros]);
 
-  const obterTokenRecaptcha = useCallback(async (): Promise<string> => {
-    const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
-    if (!siteKey || !window.grecaptcha) return '';
-    return new Promise<string>((resolve) => {
-      window.grecaptcha.ready(async () => {
-        try {
-          const token = await window.grecaptcha.execute(siteKey, { action: 'payment' });
-          resolve(token);
-        } catch {
-          resolve('');
-        }
-      });
+const obterTokenRecaptcha = useCallback(async (): Promise<string> => {
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  if (!siteKey) return '';
+
+  // Aguarda o grecaptcha estar disponível (até 5 segundos)
+  await new Promise<void>((resolve) => {
+    if (window.grecaptcha) { resolve(); return; }
+    const interval = setInterval(() => {
+      if (window.grecaptcha) { clearInterval(interval); resolve(); }
+    }, 100);
+    setTimeout(() => { clearInterval(interval); resolve(); }, 5000);
+  });
+
+  if (!window.grecaptcha) return '';
+
+  return new Promise<string>((resolve) => {
+    window.grecaptcha.ready(async () => {
+      try {
+        const token = await window.grecaptcha.execute(siteKey, { action: 'payment' });
+        resolve(token);
+      } catch {
+        resolve('');
+      }
     });
-  }, []);
+  });
+}, []);
 
   const processPayment = useCallback(async () => {
     setErr(null);

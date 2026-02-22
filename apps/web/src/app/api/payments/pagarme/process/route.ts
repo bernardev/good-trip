@@ -170,6 +170,29 @@ async function validarFingerprint(fingerprint: string): Promise<{ valido: boolea
   }
 }
 
+async function validarLimiteCartoes(fingerprint: string, cardBin: string): Promise<{ valido: boolean }> {
+  if (!fingerprint) return { valido: true };
+
+  const key = `cartoes:${fingerprint}`;
+  try {
+    const raw = await kv.get<string>(key);
+    const cartoes: string[] = raw ? JSON.parse(raw) : [];
+
+    if (!cartoes.includes(cardBin)) {
+      if (cartoes.length >= 3) {
+        return { valido: false }; // mais de 3 cartões distintos → bloqueado
+      }
+      cartoes.push(cardBin);
+      await kv.set(key, JSON.stringify(cartoes), { ex: 20 * 60 }); // 20 minutos
+    }
+
+    return { valido: true };
+  } catch (error) {
+    console.error('Erro na validação de cartões:', error);
+    return { valido: true };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: RequestBody = await request.json();
@@ -375,6 +398,24 @@ export async function POST(request: NextRequest) {
           success: false,
           message: 'Data de validade inválida'
         }, { status: 400 });
+      }
+
+      const cardBin = card_number.replace(/\s/g, '').slice(0, 6);
+        const limiteCartoes = await validarLimiteCartoes(fingerprint || '', cardBin);
+        if (!limiteCartoes.valido) {
+          console.warn('Limite de cartões atingido para fingerprint:', fingerprint);
+          notificarAdmin({
+            tipo: 'ERRO_PAGAMENTO',
+            passageiro: customer?.name,
+            valor: amount / 100,
+            erro: 'Limite de cartões atingido',
+            detalhes: `Dispositivo ${fingerprint} tentou mais de 3 cartões distintos`,
+          }).catch(console.error);
+          return NextResponse.json({
+            success: false,
+            message: 'Muitas tentativas com cartões diferentes. Aguarde 20 minutos.',
+            code: 'card_limit_exceeded',
+          }, { status: 429 });
       }
 
       const orderData = {

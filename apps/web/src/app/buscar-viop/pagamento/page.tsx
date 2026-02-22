@@ -6,6 +6,7 @@ import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CreditCard, QrCode, Mail, Bus, Clock, Lock, Shield, CheckCircle2, AlertCircle, Info, Phone, User, Tag, X } from 'lucide-react';
 import { getObservacaoRota, getCorObservacao } from '@/lib/observacoes-rotas';
+import FingerprintJS from '@fingerprintjs/fingerprintjs';
 
 declare global {
   interface Window {
@@ -395,12 +396,23 @@ const obterTokenRecaptcha = useCallback(async (): Promise<string> => {
   });
 }, []);
 
+const obterFingerprint = useCallback(async (): Promise<string> => {
+  try {
+    const fp = await FingerprintJS.load();
+    const result = await fp.get();
+    return result.visitorId;
+  } catch {
+    return '';
+  }
+}, []);
+
   const processPayment = useCallback(async () => {
     setErr(null);
     setLoading(true);
 
       try {
         const recaptchaToken = await obterTokenRecaptcha();
+        const fingerprint = await obterFingerprint();
 
         if (paymentMethod === 'credit_card') {
         if (!cardNumber || !cardName || !cardExpiry || !cardCvv) {
@@ -444,6 +456,7 @@ const obterTokenRecaptcha = useCallback(async (): Promise<string> => {
               desconto: valorDesconto > 0 ? valorDesconto : undefined,
             },
             recaptcha_token: recaptchaToken,
+            fingerprint: fingerprint,
           })
         });
 
@@ -483,6 +496,7 @@ const obterTokenRecaptcha = useCallback(async (): Promise<string> => {
               desconto: valorDesconto > 0 ? valorDesconto : undefined,
             },
             recaptcha_token: recaptchaToken,
+            fingerprint: fingerprint,
           })
         });
 
@@ -558,40 +572,25 @@ const obterTokenRecaptcha = useCallback(async (): Promise<string> => {
     )}
   </button>
 
-  <div className="relative rounded-xl border-2 border-slate-200 bg-slate-50 p-4 opacity-60 cursor-not-allowed">
-    <div className="flex flex-col items-center gap-2">
-      <CreditCard className="w-8 h-8 text-slate-400" />
-      <span className="font-semibold text-sm text-slate-600">Cartão de Crédito</span>
-      <span className="text-xs text-slate-500">Indisponível</span>
-    </div>
-    <div className="absolute inset-0 flex items-center justify-center">
-      <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded transform -rotate-12">
-        EM BREVE
-      </span>
-    </div>
+<button
+  onClick={() => setPaymentMethod('credit_card')}
+  className={`relative rounded-xl border-2 p-4 transition-all duration-300 ${
+    paymentMethod === 'credit_card'
+      ? 'border-blue-600 bg-blue-50 shadow-md scale-105'
+      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+  }`}
+>
+  <div className="flex flex-col items-center gap-2">
+    <CreditCard className={`w-8 h-8 ${paymentMethod === 'credit_card' ? 'text-blue-600' : 'text-slate-400'}`} />
+    <span className="font-semibold text-sm">Cartão de Crédito</span>
+    <span className="text-xs text-slate-500">Em até 12x</span>
   </div>
-</div>
-
-<div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-4 mb-6">
-  <div className="flex items-start gap-3">
-    <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-    <div className="text-sm">
-      <p className="font-bold text-amber-900 mb-1">Pagamento com Cartão Temporariamente Indisponível</p>
-      <p className="text-amber-800 mb-2">
-        Para pagar com cartão de crédito ou débito, entre em contato diretamente com nosso atendimento:
-      </p>
-      <a
-        href="https://wa.me/5593991436570"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors"
-      >
-        <Phone className="w-4 h-4" />
-        (93) 9143-6570
-      </a>
-      
+  {paymentMethod === 'credit_card' && (
+    <div className="absolute -top-2 -right-2 bg-blue-600 rounded-full p-1">
+      <CheckCircle2 className="w-4 h-4 text-white" />
     </div>
-  </div>
+  )}
+</button>
 </div>
 
               {paymentMethod === 'pix' && (

@@ -110,6 +110,7 @@ type RequestBody = {
   card_cvv?: string;
   installments?: number;
   recaptcha_token?: string;
+  fingerprint?: string;
 };
 
 async function salvarDadosReserva(orderId: string, chargeId: string, data: ReservaData): Promise<void> {
@@ -126,7 +127,7 @@ async function salvarDadosReserva(orderId: string, chargeId: string, data: Reser
   }
 }
 
-// 🔒 Validação reCAPTCHA v3
+// Validação reCAPTCHA v3
 async function validarRecaptcha(token: string): Promise<{ valido: boolean; score: number }> {
   const secretKey = process.env.RECAPTCHA_SECRET_KEY;
 
@@ -136,7 +137,7 @@ async function validarRecaptcha(token: string): Promise<{ valido: boolean; score
   }
 
   if (!token) {
-    console.warn('⚠️ Token reCAPTCHA ausente');
+    console.warn('Token reCAPTCHA ausente');
     return { valido: false, score: 0 };
   }
 
@@ -146,12 +147,26 @@ async function validarRecaptcha(token: string): Promise<{ valido: boolean; score
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `secret=${secretKey}&response=${token}`,
     });
-const data = await response.json() as { success: boolean; score: number; action: string; 'error-codes'?: string[] };
-console.log('🔒 reCAPTCHA resultado COMPLETO:', JSON.stringify(data));
-return { valido: data.success && data.score >= 0.5, score: data.score ?? 0 };
+  const data = await response.json() as { success: boolean; score: number; action: string; 'error-codes'?: string[] };
+  console.log('reCAPTCHA resultado COMPLETO:', JSON.stringify(data));
+  return { valido: data.success && data.score >= 0.5, score: data.score ?? 0 };
   } catch (error) {
     console.error('Erro ao validar reCAPTCHA:', error);
     return { valido: false, score: 0 };
+  }
+}
+
+async function validarFingerprint(fingerprint: string): Promise<{ valido: boolean }> {
+  if (!fingerprint) return { valido: true }; // se não veio, deixa passar
+
+  const key = `rate_limit:fingerprint:${fingerprint}`;
+  try {
+    const count = await kv.incr(key);
+    if (count === 1) await kv.expire(key, 20 * 60); // 20 minutos
+    return { valido: count <= 2 };
+  } catch (error) {
+    console.error('❌ Erro na validação de fingerprint:', error);
+    return { valido: true };
   }
 }
 
@@ -169,7 +184,8 @@ export async function POST(request: NextRequest) {
       card_expiry,
       card_cvv,
       installments,
-      recaptcha_token
+      recaptcha_token,
+      fingerprint,
     } = body;
 
     if (!payment_method || !amount || !customer) {
@@ -181,23 +197,41 @@ export async function POST(request: NextRequest) {
 
     if (!isSimulationMode) {
     const recaptcha = await validarRecaptcha(recaptcha_token || '');
-    if (!recaptcha.valido) {
-      console.warn('🚨 reCAPTCHA reprovado — possível bot/fraude. Score:', recaptcha.score);
-      notificarAdmin({
-        tipo: 'ERRO_PAGAMENTO',
-        passageiro: customer?.name,
-        valor: amount / 100,
-        erro: 'Bloqueado por reCAPTCHA',
-        detalhes: `Score: ${recaptcha.score} — possível tentativa automatizada`,
-      }).catch(console.error);
-      return NextResponse.json({
-        success: false,
-        message: 'Verificação de segurança falhou. Recarregue a página e tente novamente.',
-        code: 'recaptcha_failed',
-      }, { status: 403 });
+      if (!recaptcha.valido) {
+        console.warn('🚨 reCAPTCHA reprovado — possível bot/fraude. Score:', recaptcha.score);
+        notificarAdmin({
+          tipo: 'ERRO_PAGAMENTO',
+          passageiro: customer?.name,
+          valor: amount / 100,
+          erro: 'Bloqueado por reCAPTCHA',
+          detalhes: `Score: ${recaptcha.score} — possível tentativa automatizada`,
+        }).catch(console.error);
+        return NextResponse.json({
+          success: false,
+          message: 'Verificação de segurança falhou. Recarregue a página e tente novamente.',
+          code: 'recaptcha_failed',
+        }, { status: 403 });
+      }
+      console.log(`✅ reCAPTCHA aprovado (score: ${recaptcha.score})`);
     }
-    console.log(`✅ reCAPTCHA aprovado (score: ${recaptcha.score})`);
-    }
+    if (fingerprint) {
+  const fp = await validarFingerprint(fingerprint);
+  if (!fp.valido) {
+    console.warn('Fingerprint bloqueado:', fingerprint);
+    notificarAdmin({
+      tipo: 'ERRO_PAGAMENTO',
+      passageiro: customer?.name,
+      valor: amount / 100,
+      erro: 'Bloqueado por fingerprint',
+      detalhes: `Dispositivo ${fingerprint} excedeu o limite de tentativas`,
+    }).catch(console.error);
+    return NextResponse.json({
+      success: false,
+      message: 'Muitas tentativas deste dispositivo. Aguarde 20 minutos.',
+      code: 'fingerprint_blocked',
+    }, { status: 429 });
+  }
+}
 
     const reservaData: ReservaData = {
       servico: booking?.servico,

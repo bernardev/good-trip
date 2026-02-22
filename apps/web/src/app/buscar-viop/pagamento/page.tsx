@@ -442,8 +442,8 @@ const obterTokenRecaptcha = useCallback(async (): Promise<string> => {
               passenger_name: primeiroPassageiro.nomeCompleto,
               cupom: cupomAplicado || undefined,
               desconto: valorDesconto > 0 ? valorDesconto : undefined,
-              recaptcha_token: recaptchaToken
-            }
+            },
+            recaptcha_token: recaptchaToken,
           })
         });
 

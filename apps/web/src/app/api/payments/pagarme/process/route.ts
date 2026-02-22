@@ -146,9 +146,9 @@ async function validarRecaptcha(token: string): Promise<{ valido: boolean; score
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `secret=${secretKey}&response=${token}`,
     });
-    const data = await response.json() as { success: boolean; score: number; action: string };
-    console.log('reCAPTCHA resultado:', { success: data.success, score: data.score, action: data.action });
-    return { valido: data.success && data.score >= 0.5, score: data.score ?? 0 };
+const data = await response.json() as { success: boolean; score: number; action: string; 'error-codes'?: string[] };
+console.log('🔒 reCAPTCHA resultado COMPLETO:', JSON.stringify(data));
+return { valido: data.success && data.score >= 0.5, score: data.score ?? 0 };
   } catch (error) {
     console.error('Erro ao validar reCAPTCHA:', error);
     return { valido: false, score: 0 };

@@ -7,6 +7,15 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { CreditCard, QrCode, Mail, Bus, Clock, Lock, Shield, CheckCircle2, AlertCircle, Info, Phone, User, Tag, X } from 'lucide-react';
 import { getObservacaoRota, getCorObservacao } from '@/lib/observacoes-rotas';
 
+declare global {
+  interface Window {
+    grecaptcha: {
+      ready: (cb: () => void) => void;
+      execute: (siteKey: string, options: { action: string }) => Promise<string>;
+    };
+  }
+}
+
 type Query = {
   servico?: string; 
   origem?: string; 
@@ -152,6 +161,16 @@ function PagamentoContent() {
       telefone: ''
     };
   }, [passageiros]);
+
+  useEffect(() => {
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  if (!siteKey || document.getElementById('recaptcha-script')) return;
+  const script = document.createElement('script');
+  script.id = 'recaptcha-script';
+  script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+  script.async = true;
+  document.head.appendChild(script);
+  }, []);
 
   useEffect(() => {
     async function fetchViagemData() {
@@ -349,12 +368,29 @@ function PagamentoContent() {
     return options;
   }, [totalSemJuros]);
 
+  const obterTokenRecaptcha = useCallback(async (): Promise<string> => {
+    const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+    if (!siteKey || !window.grecaptcha) return '';
+    return new Promise<string>((resolve) => {
+      window.grecaptcha.ready(async () => {
+        try {
+          const token = await window.grecaptcha.execute(siteKey, { action: 'payment' });
+          resolve(token);
+        } catch {
+          resolve('');
+        }
+      });
+    });
+  }, []);
+
   const processPayment = useCallback(async () => {
     setErr(null);
     setLoading(true);
 
-    try {
-      if (paymentMethod === 'credit_card') {
+      try {
+        const recaptchaToken = await obterTokenRecaptcha();
+
+        if (paymentMethod === 'credit_card') {
         if (!cardNumber || !cardName || !cardExpiry || !cardCvv) {
           throw new Error('Preencha todos os dados do cartão');
         }
@@ -393,7 +429,8 @@ function PagamentoContent() {
               title,
               passenger_name: primeiroPassageiro.nomeCompleto,
               cupom: cupomAplicado || undefined,
-              desconto: valorDesconto > 0 ? valorDesconto : undefined
+              desconto: valorDesconto > 0 ? valorDesconto : undefined,
+              recaptcha_token: recaptchaToken
             }
           })
         });
@@ -431,7 +468,8 @@ function PagamentoContent() {
               title,
               passenger_name: primeiroPassageiro.nomeCompleto,
               cupom: cupomAplicado || undefined,
-              desconto: valorDesconto > 0 ? valorDesconto : undefined
+              desconto: valorDesconto > 0 ? valorDesconto : undefined,
+              recaptcha_token: recaptchaToken
             }
           })
         });
@@ -453,7 +491,7 @@ function PagamentoContent() {
     }
   }, [
     paymentMethod, cardNumber, cardName, cardExpiry, cardCvv, 
-    installments, totalComJuros, totalSemJuros, q, title, router, passageiros, primeiroPassageiro, cupomAplicado, valorDesconto
+    installments, totalComJuros, totalSemJuros, q, title, router, passageiros, primeiroPassageiro, cupomAplicado, valorDesconto, obterTokenRecaptcha,
   ]);
 
   if (loadingViagem) {

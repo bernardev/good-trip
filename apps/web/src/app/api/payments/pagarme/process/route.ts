@@ -109,6 +109,7 @@ type RequestBody = {
   card_expiry?: string;
   card_cvv?: string;
   installments?: number;
+  recaptcha_token?: string;
 };
 
 async function salvarDadosReserva(orderId: string, chargeId: string, data: ReservaData): Promise<void> {
@@ -125,6 +126,35 @@ async function salvarDadosReserva(orderId: string, chargeId: string, data: Reser
   }
 }
 
+// 🔒 Validação reCAPTCHA v3
+async function validarRecaptcha(token: string): Promise<{ valido: boolean; score: number }> {
+  const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+
+  if (!secretKey) {
+    console.warn('⚠️ RECAPTCHA_SECRET_KEY não configurada, pulando validação');
+    return { valido: true, score: 1 };
+  }
+
+  if (!token) {
+    console.warn('⚠️ Token reCAPTCHA ausente');
+    return { valido: false, score: 0 };
+  }
+
+  try {
+    const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `secret=${secretKey}&response=${token}`,
+    });
+    const data = await response.json() as { success: boolean; score: number; action: string };
+    console.log('reCAPTCHA resultado:', { success: data.success, score: data.score, action: data.action });
+    return { valido: data.success && data.score >= 0.5, score: data.score ?? 0 };
+  } catch (error) {
+    console.error('Erro ao validar reCAPTCHA:', error);
+    return { valido: false, score: 0 };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: RequestBody = await request.json();
@@ -138,7 +168,8 @@ export async function POST(request: NextRequest) {
       card_name,
       card_expiry,
       card_cvv,
-      installments 
+      installments,
+      recaptcha_token
     } = body;
 
     if (!payment_method || !amount || !customer) {
@@ -146,6 +177,26 @@ export async function POST(request: NextRequest) {
         success: false,
         message: 'Dados obrigatórios faltando'
       }, { status: 400 });
+    }
+
+    if (!isSimulationMode) {
+    const recaptcha = await validarRecaptcha(recaptcha_token || '');
+    if (!recaptcha.valido) {
+      console.warn('🚨 reCAPTCHA reprovado — possível bot/fraude. Score:', recaptcha.score);
+      notificarAdmin({
+        tipo: 'ERRO_PAGAMENTO',
+        passageiro: customer?.name,
+        valor: amount / 100,
+        erro: 'Bloqueado por reCAPTCHA',
+        detalhes: `Score: ${recaptcha.score} — possível tentativa automatizada`,
+      }).catch(console.error);
+      return NextResponse.json({
+        success: false,
+        message: 'Verificação de segurança falhou. Recarregue a página e tente novamente.',
+        code: 'recaptcha_failed',
+      }, { status: 403 });
+    }
+    console.log(`✅ reCAPTCHA aprovado (score: ${recaptcha.score})`);
     }
 
     const reservaData: ReservaData = {

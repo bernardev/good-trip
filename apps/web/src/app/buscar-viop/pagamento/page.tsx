@@ -370,6 +370,7 @@ function PagamentoContent() {
 
 const obterTokenRecaptcha = useCallback(async (): Promise<string> => {
   const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  console.log('siteKey:', siteKey ? 'OK' : 'VAZIO');
   if (!siteKey) return '';
 
   // Aguarda o grecaptcha estar disponível (até 5 segundos)

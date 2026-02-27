@@ -111,6 +111,7 @@ type RequestBody = {
   installments?: number;
   recaptcha_token?: string;
   fingerprint?: string;
+  cep?: string;
 };
 
 async function salvarDadosReserva(orderId: string, chargeId: string, data: ReservaData): Promise<void> {
@@ -209,6 +210,7 @@ export async function POST(request: NextRequest) {
       installments,
       recaptcha_token,
       fingerprint,
+      cep,
     } = body;
 
     if (!payment_method || !amount || !customer) {
@@ -371,8 +373,8 @@ export async function POST(request: NextRequest) {
       phones: {
         mobile_phone: {
           country_code: '55',
-          area_code: customer.phone?.area_code || '11',
-          number: customer.phone?.number || '999999999'
+          area_code: booking?.passageiros?.[0]?.telefone?.replace(/\D/g, '').slice(0, 2) || '93',
+          number: booking?.passageiros?.[0]?.telefone?.replace(/\D/g, '').slice(2) || '999999999'
         }
       }
     };
@@ -433,10 +435,10 @@ export async function POST(request: NextRequest) {
               exp_year: parseInt('20' + expiryParts[1]),
               cvv: card_cvv,
               billing_address: {
-                line_1: 'Rua Exemplo, 123',
-                zip_code: '01310100',
-                city: 'São Paulo',
-                state: 'SP',
+                line_1: 'Endereco',
+                zip_code: cep || '01310100',
+                city: 'Brasil',
+                state: 'XX',
                 country: 'BR'
               }
             }

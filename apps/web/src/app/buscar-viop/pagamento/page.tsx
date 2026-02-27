@@ -99,6 +99,7 @@ function PagamentoContent() {
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [installments, setInstallments] = useState('1');
+  const [cep, setCep] = useState('');
 
   // 🔥 NOVO: Estados do cupom
   const [cupomInput, setCupomInput] = useState('');
@@ -335,6 +336,13 @@ function PagamentoContent() {
     setCardCvv(value);
   };
 
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  let value = e.target.value.replace(/\D/g, '');
+  if (value.length > 8) value = value.slice(0, 8);
+  if (value.length > 5) value = value.slice(0, 5) + '-' + value.slice(5);
+  setCep(value);
+  };
+
   const getCardBrand = useCallback((number: string): string => {
     const cleaned = number.replace(/\s/g, '');
     if (/^4/.test(cleaned)) return 'visa';
@@ -411,6 +419,10 @@ const obterFingerprint = useCallback(async (): Promise<string> => {
     setLoading(true);
 
       try {
+        
+        if (!cep || cep.replace(/\D/g, '').length < 8) {
+          throw new Error('Informe um CEP válido');
+        }
         const recaptchaToken = await obterTokenRecaptcha();
         const fingerprint = await obterFingerprint();
 
@@ -457,6 +469,7 @@ const obterFingerprint = useCallback(async (): Promise<string> => {
             },
             recaptcha_token: recaptchaToken,
             fingerprint: fingerprint,
+            cep: cep.replace(/\D/g, ''),
           })
         });
 
@@ -497,6 +510,7 @@ const obterFingerprint = useCallback(async (): Promise<string> => {
             },
             recaptcha_token: recaptchaToken,
             fingerprint: fingerprint,
+            cep: cep.replace(/\D/g, ''),
           })
         });
 
@@ -517,7 +531,7 @@ const obterFingerprint = useCallback(async (): Promise<string> => {
     }
   }, [
     paymentMethod, cardNumber, cardName, cardExpiry, cardCvv, 
-    installments, totalComJuros, totalSemJuros, q, title, router, passageiros, primeiroPassageiro, cupomAplicado, valorDesconto, obterTokenRecaptcha,
+    installments, totalComJuros, totalSemJuros, q, title, router, passageiros, primeiroPassageiro, cupomAplicado, valorDesconto, obterTokenRecaptcha, cep,
   ]);
 
   if (loadingViagem) {
@@ -725,6 +739,24 @@ const obterFingerprint = useCallback(async (): Promise<string> => {
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className="rounded-2xl bg-white p-6 shadow-lg border border-slate-200">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Info className="w-5 h-5 text-blue-600" />
+                Endereço de cobrança
+              </h2>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">CEP</label>
+                <input
+                  type="text"
+                  value={cep}
+                  onChange={handleCepChange}
+                  placeholder="00000-000"
+                  maxLength={9}
+                  className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 focus:border-blue-600 focus:ring-2 focus:ring-blue-600 focus:ring-opacity-20 transition-all"
+                />
+              </div>
             </div>
 
             {err && (

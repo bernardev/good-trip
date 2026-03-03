@@ -1,7 +1,7 @@
 // apps/web/src/lib/evolution-whatsapp.ts
 
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'http://31.97.42.88:8082';
-const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'teste-eduardo';
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'monitoramento-eduardo';
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || 'apikey321';
 
 /**

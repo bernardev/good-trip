@@ -125,8 +125,8 @@ export async function GET(req: Request) {
     : Promise.resolve(null);
 
   const viopPromise: Promise<UnifiedTrip[] | null> = vParams
-    ? Viop.buscarCorridas(vParams.origemId, vParams.destinoId, vParams.date).then((arr) =>
-        (arr as CorridaViop[]).map((c) => corridaToUnified(c, vParams))
+    ? Viop.buscarCorridas(vParams.origemId, vParams.destinoId, vParams.date).then((result) =>
+        (result.corridas as CorridaViop[]).map((c) => corridaToUnified(c, vParams))
       )
     : Promise.resolve(null);
 

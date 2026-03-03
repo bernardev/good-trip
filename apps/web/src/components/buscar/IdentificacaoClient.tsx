@@ -229,6 +229,23 @@ const [passageiros, setPassageiros] = useState<PassageiroForm[]>(
       telefone: p.telefone.replace(/\D/g, ''),
     }));
 
+      // 📊 Tracking: identificação concluída
+      fetch('/api/tracking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          evento: 'IDENTIFICACAO_CONCLUIDA',
+          dados: {
+            passageiro: passageirosSanitizados[0]?.nomeCompleto,
+            origem: query.origem,
+            destino: query.destino,
+            data: query.data,
+            assentos: query.assentos,
+            valor: typeof meta?.preco === 'number' ? meta.preco * query.assentos.length : undefined,
+          }
+        })
+      }).catch(() => {});
+
       const params = new URLSearchParams({
         servico: query.servico,
         origem: query.origem,

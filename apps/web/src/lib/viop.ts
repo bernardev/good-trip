@@ -41,6 +41,13 @@ export type Corrida = {
   conexao?: ConexaoData; // 🔥 NOVO
 };
 
+// Resultado de buscarCorridas (inclui nomes das cidades da resposta da API)
+export type BuscaCorridasResult = {
+  corridas: Corrida[];
+  origemNome: string;
+  destinoNome: string;
+};
+
 export type Poltrona = { numero: string; livre: boolean; classe?: string };
 export type Onibus = {
   corridaId: string;
@@ -452,8 +459,8 @@ export const Viop = {
     origemId: string,
     destinoId: string,
     dataIso: string
-  ): Promise<Corrida[]> {
-    if (MOCK) return Promise.resolve(mockCorridas());
+  ): Promise<BuscaCorridasResult> {
+    if (MOCK) return Promise.resolve({ corridas: mockCorridas(), origemNome: 'Mock Origem', destinoNome: 'Mock Destino' });
     const d = new Date(dataIso);
     const y = d.getUTCFullYear();
     const m = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -465,8 +472,28 @@ export const Viop = {
       data: ymd,
     };
     const res = await viopFetch<unknown>(Path.consultacorrida.buscar(), "POST", body);
+
+    // Extrair nomes das cidades da resposta top-level
+    let origemNome = '';
+    let destinoNome = '';
+    if (typeof res === 'object' && res !== null) {
+      const r = res as Record<string, unknown>;
+      if (r.origem && typeof r.origem === 'object') {
+        const o = r.origem as RjLocalidade;
+        origemNome = o.cidade ? `${o.cidade} - ${o.uf}` : '';
+      }
+      if (r.destino && typeof r.destino === 'object') {
+        const d2 = r.destino as RjLocalidade;
+        destinoNome = d2.cidade ? `${d2.cidade} - ${d2.uf}` : '';
+      }
+    }
+
     const servicos = parseCorridasFromUnknown(res);
-    return servicos.map(mapRjServicoToCorrida);
+    return {
+      corridas: servicos.map(mapRjServicoToCorrida),
+      origemNome,
+      destinoNome,
+    };
   },
 
   async buscarOnibus(corridaId: string): Promise<Onibus> {

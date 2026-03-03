@@ -46,13 +46,24 @@ function PixContent() {
     return () => clearInterval(timer);
   }, [timeLeft]);
 
-  // 🛑 Parar polling quando expirar
+  // 🛑 Parar polling quando expirar + notificar admin
   useEffect(() => {
-    if (expired && pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
+    if (expired) {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      // 📊 Tracking: PIX expirou sem pagamento
+      fetch('/api/tracking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          evento: 'PIX_EXPIRADO',
+          dados: { orderId },
+        }),
+      }).catch(() => {});
     }
-  }, [expired]);
+  }, [expired, orderId]);
 
   // 🔄 Verifica pagamento (só enquanto não expirou)
   useEffect(() => {

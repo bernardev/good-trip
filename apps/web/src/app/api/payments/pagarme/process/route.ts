@@ -195,13 +195,18 @@ async function validarLimiteCartoes(fingerprint: string, cardBin: string): Promi
 }
 
 export async function POST(request: NextRequest) {
+  // Extrair IP do cliente para monitoramento (fora do try para estar acessível no catch)
+  const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || request.headers.get('x-real-ip')
+    || 'unknown';
+
   try {
     const body: RequestBody = await request.json();
-    const { 
-      payment_method, 
-      amount, 
-      customer, 
-      booking, 
+    const {
+      payment_method,
+      amount,
+      customer,
+      booking,
       metadata,
       card_number,
       card_name,
@@ -224,7 +229,7 @@ export async function POST(request: NextRequest) {
     const recaptcha = await validarRecaptcha(recaptcha_token || '');
       if (!recaptcha.valido) {
         console.warn('🚨 reCAPTCHA reprovado — possível bot/fraude. Score:', recaptcha.score);
-        notificarAdmin({
+        notificarAdmin({ ip: clientIp,
           tipo: 'ERRO_PAGAMENTO',
           passageiro: customer?.name,
           valor: amount / 100,
@@ -243,7 +248,7 @@ export async function POST(request: NextRequest) {
   const fp = await validarFingerprint(fingerprint);
   if (!fp.valido) {
     console.warn('Fingerprint bloqueado:', fingerprint);
-    notificarAdmin({
+    notificarAdmin({ ip: clientIp,
       tipo: 'ERRO_PAGAMENTO',
       passageiro: customer?.name,
       valor: amount / 100,
@@ -292,7 +297,7 @@ export async function POST(request: NextRequest) {
       if (payment_method === 'credit_card') {
         if (card_cvv && card_cvv.startsWith('6')) {
           // 🔥 Notificar erro
-          notificarAdmin({
+          notificarAdmin({ ip: clientIp,
             tipo: 'ERRO_PAGAMENTO',
             passageiro: customer.name,
             valor: amount / 100,
@@ -313,7 +318,7 @@ export async function POST(request: NextRequest) {
         await salvarDadosReserva(orderId, chargeId, reservaData);
 
         // 🔥 Notificar pagamento aprovado
-        notificarAdmin({
+        notificarAdmin({ ip: clientIp,
           tipo: 'CARTAO_PROCESSADO',
           orderId,
           passageiro: customer.name,
@@ -340,7 +345,7 @@ export async function POST(request: NextRequest) {
         await salvarDadosReserva(orderId, chargeId, reservaData);
 
         // 🔥 Notificar PIX gerado
-        notificarAdmin({
+        notificarAdmin({ ip: clientIp,
           tipo: 'PIX_GERADO',
           orderId,
           passageiro: customer.name,
@@ -406,7 +411,7 @@ export async function POST(request: NextRequest) {
         const limiteCartoes = await validarLimiteCartoes(fingerprint || '', cardBin);
         if (!limiteCartoes.valido) {
           console.warn('Limite de cartões atingido para fingerprint:', fingerprint);
-          notificarAdmin({
+          notificarAdmin({ ip: clientIp,
             tipo: 'ERRO_PAGAMENTO',
             passageiro: customer?.name,
             valor: amount / 100,
@@ -466,7 +471,7 @@ export async function POST(request: NextRequest) {
         console.error('❌ Erro da API Pagar.me:', errorData);
         
         // 🔥 Notificar erro
-        notificarAdmin({
+        notificarAdmin({ ip: clientIp,
           tipo: 'ERRO_PAGAMENTO',
           passageiro: customer.name,
           valor: amount / 100,
@@ -491,7 +496,7 @@ export async function POST(request: NextRequest) {
 
       if (status === 'paid') {
         // 🔥 Notificar pagamento aprovado
-        notificarAdmin({
+        notificarAdmin({ ip: clientIp,
           tipo: 'CARTAO_PROCESSADO',
           orderId: order.id,
           passageiro: customer.name,
@@ -518,7 +523,7 @@ export async function POST(request: NextRequest) {
         const errorMessage = charge.last_transaction?.gateway_response?.message || 'Pagamento recusado';
         
         // 🔥 Notificar falha
-        notificarAdmin({
+        notificarAdmin({ ip: clientIp,
           tipo: 'ERRO_PAGAMENTO',
           orderId: order.id,
           passageiro: customer.name,
@@ -570,7 +575,7 @@ export async function POST(request: NextRequest) {
         console.error('❌ Erro da API Pagar.me:', errorData);
         
         // 🔥 Notificar erro
-        notificarAdmin({
+        notificarAdmin({ ip: clientIp,
           tipo: 'ERRO_PAGAMENTO',
           passageiro: customer.name,
           valor: amount / 100,
@@ -605,7 +610,7 @@ export async function POST(request: NextRequest) {
       await salvarDadosReserva(order.id, charge.id, reservaData);
 
       // 🔥 Notificar PIX gerado
-      notificarAdmin({
+      notificarAdmin({ ip: clientIp,
         tipo: 'PIX_GERADO',
         orderId: order.id,
         passageiro: customer.name,
@@ -639,7 +644,7 @@ export async function POST(request: NextRequest) {
     console.error('❌ Erro ao processar pagamento:', error);
     
     // 🔥 Notificar erro crítico
-    notificarAdmin({
+    notificarAdmin({ ip: clientIp,
       tipo: 'ERRO_PAGAMENTO',
       erro: 'Erro interno',
       detalhes: error instanceof Error ? error.message : 'Erro desconhecido'

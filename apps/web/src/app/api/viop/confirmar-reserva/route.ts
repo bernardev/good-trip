@@ -150,7 +150,12 @@ async function gerarPDFBilhete(orderId: string): Promise<Buffer | null> {
 export async function POST(req: NextRequest) {
   const bilhetesEmitidos: ConfirmacaoResponse[] = [];
   let orderId = '';
-  
+
+  // Extrair IP do cliente para monitoramento (fora do try para estar acessível no catch)
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || req.headers.get('x-real-ip')
+    || 'unknown';
+
   try {
     const body: RequestBody = await req.json();
     const { orderId: orderIdFromBody, status, simulate_error } = body;
@@ -237,7 +242,7 @@ export async function POST(req: NextRequest) {
         const codigoErro = (erroAssento as Error & { codigoErro?: string }).codigoErro || 'ERRO_GENERICO';
         console.error(`❌ Erro ao processar assento ${assento} [${codigoErro}]:`, mensagemErro);
         
-        notificarAdmin({
+        notificarAdmin({ ip: clientIp,
           tipo: 'ERRO_EMISSAO',
           orderId,
           passageiro: reservaData.passageiros[0]?.nomeCompleto,
@@ -259,7 +264,14 @@ export async function POST(req: NextRequest) {
 
         if (resultadoEstorno.estornado) {
           console.log(`✅ Estorno processado: R$ ${resultadoEstorno.valorEstornado?.toFixed(2)}`);
-          
+
+          notificarAdmin({ ip: clientIp,
+            tipo: 'ESTORNO_PROCESSADO',
+            orderId,
+            valorEstornado: resultadoEstorno.valorEstornado,
+            motivo: `Falha na emissão do assento ${assento}: ${mensagemErro}`,
+          }).catch(console.error);
+
           return NextResponse.json({
             error: `Erro ao emitir bilhetes. Estorno automático processado.`,
             status: 'NEGADO',
@@ -272,6 +284,13 @@ export async function POST(req: NextRequest) {
           }, { status: 500 });
         } else {
           console.error(`❌ Falha ao processar estorno:`, resultadoEstorno.error);
+
+          notificarAdmin({ ip: clientIp,
+            tipo: 'ESTORNO_FALHOU',
+            orderId,
+            valor: reservaData.preco,
+            erro: resultadoEstorno.error || 'Erro desconhecido no estorno',
+          }).catch(console.error);
 
           return NextResponse.json({
             error: `Erro ao emitir bilhetes e processar estorno.`,
@@ -431,7 +450,7 @@ export async function POST(req: NextRequest) {
       console.log('📱 Enviando link do bilhete via WhatsApp...');
     }
 
-    notificarAdmin({
+    notificarAdmin({ ip: clientIp,
       tipo: 'BILHETE_EMITIDO',
       orderId,
       passageiro: primeiroPassageiro?.nomeCompleto,
@@ -448,7 +467,7 @@ export async function POST(req: NextRequest) {
     console.error('❌ Erro fatal ao confirmar reserva:', mensagemErro);
     
     if (orderId) {
-      notificarAdmin({
+      notificarAdmin({ ip: clientIp,
         tipo: 'ERRO_EMISSAO',
         orderId,
         erro: 'Erro fatal',
@@ -458,7 +477,7 @@ export async function POST(req: NextRequest) {
     
     if (orderId && bilhetesEmitidos.length > 0) {
       console.log(`\n💸 Erro fatal - Iniciando estorno automático...`);
-      
+
       const resultadoEstorno = await estornarAutomatico(
         orderId,
         bilhetesEmitidos.length,
@@ -466,12 +485,25 @@ export async function POST(req: NextRequest) {
       );
 
       if (resultadoEstorno.estornado) {
+        notificarAdmin({ ip: clientIp,
+          tipo: 'ESTORNO_PROCESSADO',
+          orderId,
+          valorEstornado: resultadoEstorno.valorEstornado,
+          motivo: `Erro fatal: ${mensagemErro}`,
+        }).catch(console.error);
+
         return NextResponse.json({
           error: mensagemErro,
           status: 'NEGADO',
           estornoProcessado: true,
           valorEstornado: resultadoEstorno.valorEstornado
         }, { status: 500 });
+      } else {
+        notificarAdmin({ ip: clientIp,
+          tipo: 'ESTORNO_FALHOU',
+          orderId,
+          erro: resultadoEstorno.error || 'Erro desconhecido no estorno',
+        }).catch(console.error);
       }
     }
     

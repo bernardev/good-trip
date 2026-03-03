@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Viop } from "@/lib/viop";
+import { notificarAdmin } from "@/lib/notificacoes-admin";
 
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
@@ -15,8 +16,11 @@ export async function GET(req: NextRequest) {
   }
 
   const iso = `${data}T00:00:00.000Z`;
-  const corridas = await Viop.buscarCorridas(origemId, destinoId, iso);
-  
+  const resultado = await Viop.buscarCorridas(origemId, destinoId, iso);
+  const corridas = resultado.corridas;
+  const origemNome = resultado.origemNome;
+  const destinoNome = resultado.destinoNome;
+
   // 🔥 Mapear para o formato esperado pelo ViopAdapter
   // Filtrar conexões cujo destino final NÃO é o solicitado
   const corridasFiltradas = corridas.filter((corrida) => {
@@ -52,14 +56,14 @@ export async function GET(req: NextRequest) {
       return mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
     };
     
-    // Se tem conexão, usar nomes dos trechos
-    const origem = corrida.conexao 
-      ? corrida.conexao.primeiroTrechoOrigemDescricao 
-      : 'Origem'; // Fallback (não deveria acontecer)
-      
+    // Se tem conexão, usar nomes dos trechos; senão, usar nomes da resposta da API
+    const origem = corrida.conexao
+      ? corrida.conexao.primeiroTrechoOrigemDescricao
+      : origemNome || 'Origem';
+
     const destino = corrida.conexao
       ? corrida.conexao.segundoTrechoDestinoDescricao
-      : 'Destino'; // Fallback
+      : destinoNome || 'Destino';
     
     return {
       id: corrida.id,
@@ -78,5 +82,20 @@ export async function GET(req: NextRequest) {
     };
   });
   
+  // 📊 Notificar busca realizada (fire-and-forget)
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || req.headers.get('x-real-ip')
+    || 'unknown';
+  const primeiraOrigem = corridasMapeadas[0]?.origem;
+  const primeiroDestino = corridasMapeadas[0]?.destino;
+  notificarAdmin({
+    tipo: 'BUSCA_REALIZADA',
+    origem: primeiraOrigem || origemId!,
+    destino: primeiroDestino || destinoId!,
+    data,
+    resultados: corridasMapeadas.length,
+    ip,
+  }).catch(console.error);
+
   return NextResponse.json({ total: corridasMapeadas.length, corridas: corridasMapeadas }, { status: 200 });
 }

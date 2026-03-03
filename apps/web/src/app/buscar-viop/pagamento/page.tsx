@@ -189,14 +189,14 @@ function PagamentoContent() {
         url.searchParams.set('data', q.data);
 
         const res = await fetch(url, { cache: 'no-store' });
-        
+
         if (res.ok) {
           const json: ApiOnibusRes = await res.json();
-          
+
           setOrigemNome(json?.seats?.origem?.cidade || q.origem || '');
           setDestinoNome(json?.seats?.destino?.cidade || q.destino || '');
           setSaidaHorario(json?.serviceMeta?.saida || '');
-          
+
           const precoFromUrl = q.preco ? Number(q.preco) : null;
           const precoFromApi = json?.serviceMeta?.preco;
           setPrecoReal(precoFromUrl || precoFromApi || null);
@@ -217,6 +217,27 @@ function PagamentoContent() {
 
     fetchViagemData();
   }, [q.servico, q.origem, q.destino, q.data, q.preco]);
+
+  // 📊 Tracking: notificar admin que cliente chegou na página de pagamento
+  useEffect(() => {
+    const assentosArr = q.assentos ? q.assentos.split(',').filter(Boolean) : [];
+    fetch('/api/tracking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        evento: 'PAGINA_PAGAMENTO',
+        dados: {
+          passageiro: passageiros[0]?.nomeCompleto,
+          origem: q.origem,
+          destino: q.destino,
+          data: q.data,
+          assentos: assentosArr,
+          valor: q.preco ? Number(q.preco) * (isConexao ? 1 : assentosArr.length) : undefined,
+        },
+      }),
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const title = useMemo(() => {
     const o = origemNome || q.origem || 'Origem';

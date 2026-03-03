@@ -63,8 +63,8 @@ export async function GET(req: NextRequest) {
         const dateYmd = addDaysUTC(start, i);
         const iso = `${dateYmd}T00:00:00.000Z`;
 
-        const corridas = await Viop.buscarCorridas(origem.id, destino.id, iso);
-        const total = corridas.length;
+        const resultado = await Viop.buscarCorridas(origem.id, destino.id, iso);
+        const total = resultado.corridas.length;
 
         tried.push({ origem, destino, date: dateYmd, total });
         checks++;
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
             destino,
             date: dateYmd,
             totalOnDate: total,
-            corridas,
+            corridas: resultado.corridas,
           };
           return NextResponse.json(payload, { status: 200 });
         }

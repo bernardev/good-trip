@@ -114,6 +114,22 @@ const layoutPoltronas = useMemo(() => {
   const handleContinue = () => {
     if (selected.length === 0) return;
 
+    // 📊 Tracking: assentos selecionados
+    fetch('/api/tracking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        evento: 'ASSENTOS_SELECIONADOS',
+        dados: {
+          origem: query.origem,
+          destino: query.destino,
+          data: query.data,
+          assentos: selected,
+          valor: (meta.preco ?? 0) * selected.length,
+        }
+      })
+    }).catch(() => {});
+
     const params = new URLSearchParams({
       ...query,
       assentos: selected.join(',')

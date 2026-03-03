@@ -3,7 +3,6 @@ import { kv } from '@vercel/kv';
 
 const PAGARME_SECRET_KEY = process.env.PAGARME_SECRET_KEY || '';
 const PAGARME_API_URL = 'https://api.pagar.me/core/v5';
-const VALOR_MAX_ESTORNO_AUTOMATICO = 150; // R$ 150,00
 
 const getAuthHeader = (): string => {
   const auth = Buffer.from(`${PAGARME_SECRET_KEY}:`).toString('base64');
@@ -32,7 +31,7 @@ type ReservaData = {
   metadata?: Record<string, unknown>;
 };
 
-type EstornoStatus = 'PROCESSANDO' | 'CONCLUIDO' | 'FALHOU' | 'REQUER_APROVACAO';
+type EstornoStatus = 'PROCESSANDO' | 'CONCLUIDO' | 'FALHOU';
 
 type EstornoLog = {
   status: EstornoStatus;
@@ -60,7 +59,6 @@ type EstornoResult = {
   estornado: boolean;
   valorEstornado?: number;
   motivo?: string;
-  requerAprovacao?: boolean;
   error?: string;
 };
 
@@ -72,14 +70,6 @@ type EstornoKVData = {
   resultado?: PagarmeRefundResponse;
 };
 
-type EstornoPendenteKVData = {
-  orderId: string;
-  valorEstorno: number;
-  bilhetesEmitidos: number;
-  bilhetesEsperados: number;
-  motivo: string;
-  timestamp: string;
-};
 
 /**
  * Estorna automaticamente um pedido quando a emissão de bilhetes falha
@@ -142,33 +132,7 @@ export async function estornarAutomatico(
       return { success: true, estornado: false, motivo: 'Todos os bilhetes emitidos' };
     }
 
-    // 5️⃣ VERIFICAR se requer aprovação manual (> R$ 150)
-    if (valorEstorno > VALOR_MAX_ESTORNO_AUTOMATICO) {
-      console.log(`⚠️ Valor de estorno (R$ ${valorEstorno.toFixed(2)}) requer aprovação manual`);
-      
-      const dadosPendentes: EstornoPendenteKVData = {
-        orderId,
-        valorEstorno,
-        bilhetesEmitidos,
-        bilhetesEsperados: reservaData.assentos.length,
-        motivo,
-        timestamp: new Date().toISOString()
-      };
-
-      await kv.set(`estorno-pendente:${orderId}`, dadosPendentes, { ex: 604800 }); // 7 dias
-
-      await salvarLogEstorno(orderId, reservaData, bilhetesEmitidos, valorEstorno, motivo, 'REQUER_APROVACAO');
-      
-      return {
-        success: true,
-        estornado: false,
-        requerAprovacao: true,
-        valorEstornado: valorEstorno,
-        motivo: 'Valor acima do limite automático (R$ 150,00)'
-      };
-    }
-
-    // 6️⃣ MARCAR como processando ANTES de estornar (evita duplicata)
+    // 5️⃣ MARCAR como processando (evita duplicata)
     const dadosProcessando: EstornoKVData = {
       status: 'PROCESSANDO',
       timestamp: new Date().toISOString(),
@@ -178,7 +142,7 @@ export async function estornarAutomatico(
 
     await kv.set(`estorno:${orderId}`, dadosProcessando, { ex: 86400 }); // 24 horas
 
-    // 7️⃣ VALIDAR chargeId
+    // 6️⃣ VALIDAR chargeId
     if (!reservaData.chargeId) {
       const erro = 'chargeId não encontrado nos dados da reserva';
       console.error('❌', erro);
@@ -186,7 +150,7 @@ export async function estornarAutomatico(
       return { success: false, estornado: false, error: erro };
     }
 
-    // 8️⃣ CHAMAR API Pagar.me para estornar
+    // 7️⃣ CHAMAR API Pagar.me para estornar
     const resultado = await estornarPagarme(reservaData.chargeId, valorEstorno);
 
     if (!resultado) {
@@ -195,7 +159,7 @@ export async function estornarAutomatico(
       return { success: false, estornado: false, error: erro };
     }
 
-    // 9️⃣ ATUALIZAR status como concluído
+    // 8️⃣ ATUALIZAR status como concluído
     const dadosConcluido: EstornoKVData = {
       status: 'CONCLUIDO',
       timestamp: new Date().toISOString(),
@@ -204,7 +168,7 @@ export async function estornarAutomatico(
 
     await kv.set(`estorno:${orderId}`, dadosConcluido, { ex: 2592000 }); // 30 dias
 
-    // 🔟 SALVAR log completo
+    // 9️⃣ SALVAR log completo
     await salvarLogEstorno(orderId, reservaData, bilhetesEmitidos, valorEstorno, motivo, 'CONCLUIDO', undefined, resultado);
 
     console.log('✅ Estorno processado com sucesso:', {

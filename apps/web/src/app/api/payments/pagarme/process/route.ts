@@ -355,7 +355,7 @@ export async function POST(request: NextRequest) {
           charge_id: chargeId,
           qr_code: 'SIMULADO_QR_CODE_' + Math.random().toString(36).substring(7).toUpperCase(),
           qr_code_url: 'https://exemplo.com/qr-code-simulado.png',
-          expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
           message: '✅ PIX simulado gerado!',
           simulation: true
         });
@@ -545,7 +545,7 @@ export async function POST(request: NextRequest) {
         payments: [{
           payment_method: 'pix',
           pix: {
-            expires_in: 1800
+            expires_in: 600
           }
         }],
         metadata: {
@@ -620,7 +620,7 @@ export async function POST(request: NextRequest) {
         charge_id: charge.id,
         qr_code: qrCode,
         qr_code_url: qrCodeUrl,
-        expires_at: lastTransaction?.expires_at || new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        expires_at: lastTransaction?.expires_at || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
         message: 'PIX gerado com sucesso!',
         _debug: {
           has_qr_code: qrCode !== 'QR_CODE_NOT_FOUND',

@@ -117,6 +117,8 @@ type CategoriaResponse = {
 type RequestBody = {
   orderId: string;
   status: string;
+  // 🧪 TESTE: simular erro de poltrona ocupada (remover antes do deploy)
+  simulate_error?: string;
 };
 
 export const dynamic = "force-dynamic";
@@ -151,7 +153,7 @@ export async function POST(req: NextRequest) {
   
   try {
     const body: RequestBody = await req.json();
-    const { orderId: orderIdFromBody, status } = body;
+    const { orderId: orderIdFromBody, status, simulate_error } = body;
     orderId = orderIdFromBody;
 
     console.log('📝 Iniciando emissão de bilhete:', { orderId, status });
@@ -198,6 +200,14 @@ export async function POST(req: NextRequest) {
       console.log(`\n🔒 [${i + 1}/${reservaData.assentos.length}] Bloqueando assento ${assento}...`);
 
       try {
+        // 🧪 TESTE: simular erro de poltrona ocupada (remover antes do deploy)
+        if (simulate_error === 'poltrona_ocupada') {
+          console.log('🧪 SIMULANDO erro de poltrona ocupada para teste');
+          const erro = new Error(`Poltrona ${assento}: A poltrona já foi selecionada`);
+          (erro as Error & { codigoErro: string }).codigoErro = 'POLTRONA_OCUPADA';
+          throw erro;
+        }
+
         const bloqueio = await bloquearPoltronaIndividual(reservaData, assento);
 
         if (!bloqueio.transacao) {
@@ -224,7 +234,8 @@ export async function POST(req: NextRequest) {
 
       } catch (erroAssento) {
         const mensagemErro = erroAssento instanceof Error ? erroAssento.message : 'Erro desconhecido';
-        console.error(`❌ Erro ao processar assento ${assento}:`, mensagemErro);
+        const codigoErro = (erroAssento as Error & { codigoErro?: string }).codigoErro || 'ERRO_GENERICO';
+        console.error(`❌ Erro ao processar assento ${assento} [${codigoErro}]:`, mensagemErro);
         
         notificarAdmin({
           tipo: 'ERRO_EMISSAO',
@@ -252,30 +263,20 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({
             error: `Erro ao emitir bilhetes. Estorno automático processado.`,
             status: 'NEGADO',
+            codigoErro,
             estornoProcessado: true,
             valorEstornado: resultadoEstorno.valorEstornado,
             bilhetesEmitidos: bilhetesEmitidos.length,
             bilhetesEsperados: reservaData.assentos.length,
             detalhes: mensagemErro
           }, { status: 500 });
-        } else if (resultadoEstorno.requerAprovacao) {
-          console.log(`⚠️ Estorno requer aprovação manual (R$ ${resultadoEstorno.valorEstornado?.toFixed(2)})`);
-          
-          return NextResponse.json({
-            error: `Erro ao emitir bilhetes. Estorno requer aprovação manual.`,
-            status: 'NEGADO',
-            estornoRequerAprovacao: true,
-            valorEstorno: resultadoEstorno.valorEstornado,
-            bilhetesEmitidos: bilhetesEmitidos.length,
-            bilhetesEsperados: reservaData.assentos.length,
-            detalhes: mensagemErro
-          }, { status: 500 });
         } else {
           console.error(`❌ Falha ao processar estorno:`, resultadoEstorno.error);
-          
+
           return NextResponse.json({
             error: `Erro ao emitir bilhetes e processar estorno.`,
             status: 'NEGADO',
+            codigoErro,
             estornoFalhou: true,
             bilhetesEmitidos: bilhetesEmitidos.length,
             bilhetesEsperados: reservaData.assentos.length,
@@ -464,12 +465,11 @@ export async function POST(req: NextRequest) {
         `Erro fatal no processamento: ${mensagemErro}`
       );
 
-      if (resultadoEstorno.estornado || resultadoEstorno.requerAprovacao) {
+      if (resultadoEstorno.estornado) {
         return NextResponse.json({
           error: mensagemErro,
           status: 'NEGADO',
-          estornoProcessado: resultadoEstorno.estornado,
-          estornoRequerAprovacao: resultadoEstorno.requerAprovacao,
+          estornoProcessado: true,
           valorEstornado: resultadoEstorno.valorEstornado
         }, { status: 500 });
       }
@@ -548,7 +548,19 @@ async function bloquearPoltronaIndividual(reserva: ReservaData, assento: string)
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     console.error('❌ Erro ao bloquear:', res.status, text);
-    throw new Error(`Erro ao bloquear poltrona ${assento}: ${res.status}`);
+
+    // Parsear mensagem de erro da VIOP
+    let mensagemViop = `Erro ${res.status}`;
+    try {
+      const erroJson = JSON.parse(text);
+      mensagemViop = erroJson.mensagem || erroJson.message || erroJson.error || mensagemViop;
+    } catch {
+      if (text) mensagemViop = text;
+    }
+
+    const erro = new Error(`Poltrona ${assento}: ${mensagemViop}`);
+    (erro as Error & { codigoErro: string }).codigoErro = mensagemViop.includes('já foi selecionada') ? 'POLTRONA_OCUPADA' : 'ERRO_BLOQUEIO';
+    throw erro;
   }
 
   const response: unknown = await res.json();

@@ -18,7 +18,21 @@ export async function GET(req: NextRequest) {
   const corridas = await Viop.buscarCorridas(origemId, destinoId, iso);
   
   // 🔥 Mapear para o formato esperado pelo ViopAdapter
-  const corridasMapeadas = corridas.map((corrida) => {
+  // Filtrar conexões cujo destino final NÃO é o solicitado
+  const corridasFiltradas = corridas.filter((corrida) => {
+    if (!corrida.conexao) return true; // viagem direta: manter
+
+    const destinoFinalConexao = String(corrida.conexao.segundoTrechoDestino);
+    if (destinoFinalConexao !== destinoId) {
+      console.log(
+        `🚫 Conexão descartada: destino final ${corrida.conexao.segundoTrechoDestinoDescricao} (${destinoFinalConexao}) ≠ solicitado ${destinoId}`
+      );
+      return false;
+    }
+    return true;
+  });
+
+  const corridasMapeadas = corridasFiltradas.map((corrida) => {
     // Extrair hora de ISO (ex: "2026-01-23T22:30:00" → "22:30")
     const extrairHora = (isoString: string): string => {
       try {

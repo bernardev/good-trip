@@ -4,7 +4,7 @@ import { kv } from '@vercel/kv';
 import { estornarAutomatico } from '@/lib/estorno';
 import { enviarBilheteLinkWhatsApp } from '@/lib/evolution-whatsapp';
 import { notificarAdmin } from '@/lib/notificacoes-admin';
-import { enviarEmailBilheteAdmin } from '@/lib/enviar-email-bilhete';
+import { enviarEmailBilheteAdmin, enviarEmailBilheteCliente } from '@/lib/enviar-email-bilhete';
 
 const VIOP_BASE = "https://apiouroprata.rjconsultores.com.br/api-gateway";
 const TENANT = "36906f34-b731-46bc-a19d-a6d8923ac2e7";
@@ -389,8 +389,23 @@ export async function POST(req: NextRequest) {
     await kv.set(`bilhete:${orderId}`, responseData, { ex: 2592000 });
     console.log('💾 Bilhete salvo no cache para futuras consultas');
 
-    // 🔥 ADICIONAR TODO ESTE BLOCO AQUI (LOGO APÓS SALVAR NO CACHE)
     const primeiroPassageiro = reservaData.passageiros[0];
+
+    // 📇 Indexar bilhete por email do cliente (para área /minha-passagem)
+    if (primeiroPassageiro?.email) {
+      const emailKey = `bilhetes-email:${primeiroPassageiro.email.toLowerCase().trim()}`;
+      try {
+        const existente = await kv.get<string[]>(emailKey);
+        const lista = existente || [];
+        if (!lista.includes(orderId)) {
+          lista.push(orderId);
+        }
+        await kv.set(emailKey, lista, { ex: 2592000 }); // 30 dias
+        console.log('📇 Índice por email atualizado:', primeiroPassageiro.email);
+      } catch (e) {
+        console.error('⚠️ Erro ao indexar bilhete por email:', e);
+      }
+    }
     
     // 📧 ENVIAR EMAIL PARA ADMIN (não bloqueia resposta)
     (async () => {
@@ -420,7 +435,29 @@ export async function POST(req: NextRequest) {
         if (resultado.sucesso) {
           console.log('✅ Email com bilhete enviado para admin!');
         } else {
-          console.error('⚠️ Erro ao enviar email:', resultado.erro);
+          console.error('⚠️ Erro ao enviar email para admin:', resultado.erro);
+        }
+
+        // 📧 ENVIAR EMAIL PARA O CLIENTE
+        if (primeiroPassageiro?.email) {
+          const resultadoCliente = await enviarEmailBilheteCliente(pdfBuffer, {
+            localizador: responseData.localizador || '',
+            numeroBilhete: responseData.numeroBilhete || '',
+            origem: responseData.origemNome || '',
+            destino: responseData.destinoNome || '',
+            data: responseData.dataFormatada || '',
+            horario: responseData.horarioSaida || '',
+            assentos: responseData.assentos,
+            passageiro: primeiroPassageiro?.nomeCompleto || '',
+            emailCliente: primeiroPassageiro.email,
+            valor: responseData.total,
+          });
+
+          if (resultadoCliente.sucesso) {
+            console.log('✅ Email com bilhete enviado para cliente:', primeiroPassageiro.email);
+          } else {
+            console.error('⚠️ Erro ao enviar email para cliente:', resultadoCliente.erro);
+          }
         }
       } catch (error) {
         console.error('⚠️ Erro ao enviar bilhete por email (não crítico):', error);

@@ -377,15 +377,24 @@ const [passageiros, setPassageiros] = useState<PassageiroForm[]>(
 
           {/* Card: Termos + Enviar */}
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-6">
-            <label className="flex items-start gap-3 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded cursor-pointer"
-                checked={terms}
-                onChange={(e) => setTerms(e.target.checked)}
-              />
+            <label className="flex items-center gap-4 text-sm text-gray-700 cursor-pointer select-none rounded-xl p-3 -m-3 hover:bg-blue-50 transition-colors">
+              <div className="relative flex-shrink-0">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={terms}
+                  onChange={(e) => setTerms(e.target.checked)}
+                />
+                <div className="w-6 h-6 rounded-lg border-2 border-gray-300 peer-checked:border-blue-600 peer-checked:bg-blue-600 transition-all flex items-center justify-center">
+                  {terms && (
+                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </div>
               <span>
-                Reconheço e aceito os <a className="underline font-semibold" href="#">Termos e condições</a> e confirmo
+                Reconheço e aceito os <a className="underline font-semibold text-blue-600 hover:text-blue-800" href="#">Termos e condições</a> e confirmo
                 que o resumo da minha reserva está correto.
               </span>
             </label>

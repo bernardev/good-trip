@@ -17,7 +17,8 @@ type TipoNotificacao =
   | 'ERRO_PAGAMENTO'
   | 'ERRO_EMISSAO'
   | 'ESTORNO_PROCESSADO'
-  | 'ESTORNO_FALHOU';
+  | 'ESTORNO_FALHOU'
+  | 'PAGAMENTO_WEBHOOK';
 
 type DadosNotificacao = {
   tipo: TipoNotificacao;
@@ -179,6 +180,14 @@ function montarMensagemAdmin(dados: DadosNotificacao): string {
              `💰 Valor: R$ ${dados.valor?.toFixed(2) || 'N/A'}\n` +
              `❌ ${dados.erro || 'Erro desconhecido'}\n\n` +
              `⚠️ AÇÃO MANUAL NECESSÁRIA!`;
+
+    case 'PAGAMENTO_WEBHOOK':
+      return `🔔 *PAGAMENTO VIA WEBHOOK*\n\n` +
+             `⏰ ${timestamp}\n` +
+             `🔑 Order: ${dados.orderId || 'N/A'}\n` +
+             `💰 Valor: R$ ${dados.valor?.toFixed(2) || 'N/A'}\n` +
+             `📝 ${dados.detalhes || 'Pagamento detectado via webhook PagarMe'}\n\n` +
+             (dados.motivo || '');
 
     default:
       return `📢 *GOOD TRIP*\n\n${timestamp}\n\n${dados.detalhes || 'Notificação'}`;

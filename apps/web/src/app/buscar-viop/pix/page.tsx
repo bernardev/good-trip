@@ -24,7 +24,9 @@ function PixContent() {
   const [checking, setChecking] = useState(false);
   const [qrCodeImage, setQrCodeImage] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
+  const [graceActive, setGraceActive] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ⏱️ Contador de tempo
   useEffect(() => {
@@ -46,14 +48,30 @@ function PixContent() {
     return () => clearInterval(timer);
   }, [timeLeft]);
 
-  // 🛑 Parar polling quando expirar + notificar admin
+  // 🛑 Quando expirar: iniciar grace period de 60s (polling continua em background)
   useEffect(() => {
     if (expired) {
+      setGraceActive(true);
+      graceTimerRef.current = setTimeout(() => {
+        setGraceActive(false);
+      }, 60000); // 60 segundos de margem
+    }
+    return () => {
+      if (graceTimerRef.current) {
+        clearTimeout(graceTimerRef.current);
+        graceTimerRef.current = null;
+      }
+    };
+  }, [expired]);
+
+  // 🛑 Parar polling de vez quando grace period acabar + notificar admin
+  useEffect(() => {
+    if (expired && !graceActive) {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
         pollingRef.current = null;
       }
-      // 📊 Tracking: PIX expirou sem pagamento
+      // 📊 Tracking: PIX expirou sem pagamento (só após grace period)
       fetch('/api/tracking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,11 +81,11 @@ function PixContent() {
         }),
       }).catch(() => {});
     }
-  }, [expired, orderId]);
+  }, [expired, graceActive, orderId]);
 
-  // 🔄 Verifica pagamento (só enquanto não expirou)
+  // 🔄 Verifica pagamento (enquanto timer ativo OU durante grace period)
   useEffect(() => {
-    if (!orderId || expired) return;
+    if (!orderId || (expired && !graceActive)) return;
 
     const checkPayment = async () => {
       if (checking) return;
@@ -99,7 +117,7 @@ function PixContent() {
         pollingRef.current = null;
       }
     };
-  }, [orderId, expired]);
+  }, [orderId, expired, graceActive]);
 
   // 🖼️ GERA O QR CODE REAL
   useEffect(() => {

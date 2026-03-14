@@ -18,6 +18,8 @@ type TrechoData = {
   origemNome: string;
   destinoNome: string;
   data: string;
+  fullOrigemId?: string;
+  fullDestinoId?: string;
 };
 
 type Props = {
@@ -74,8 +76,12 @@ export function SeatSelectionModal({ isOpen, onClose, trechos, onComplete }: Pro
     if (!trecho) return;
 
     try {
-      const endpoint = trechos.length > 1 ? '/api/viop/onibus-trecho' : '/api/viop/onibus';
-      const url = `${endpoint}?servico=${trecho.servico}&origemId=${trecho.origem}&destinoId=${trecho.destino}&data=${trecho.data}`;
+      const isConexao = trechos.length > 1;
+      const endpoint = isConexao ? '/api/viop/onibus-trecho' : '/api/viop/onibus';
+      let url = `${endpoint}?servico=${trecho.servico}&origemId=${trecho.origem}&destinoId=${trecho.destino}&data=${trecho.data}`;
+      if (isConexao && trecho.fullOrigemId && trecho.fullDestinoId) {
+        url += `&fullOrigemId=${trecho.fullOrigemId}&fullDestinoId=${trecho.fullDestinoId}`;
+      }
       
       const response = await fetch(url);
 

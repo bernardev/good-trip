@@ -18,7 +18,8 @@ type TipoNotificacao =
   | 'ERRO_EMISSAO'
   | 'ESTORNO_PROCESSADO'
   | 'ESTORNO_FALHOU'
-  | 'PAGAMENTO_WEBHOOK';
+  | 'PAGAMENTO_WEBHOOK'
+  | 'PAGAMENTO_SEM_BILHETE';
 
 type DadosNotificacao = {
   tipo: TipoNotificacao;
@@ -188,6 +189,15 @@ function montarMensagemAdmin(dados: DadosNotificacao): string {
              `💰 Valor: R$ ${dados.valor?.toFixed(2) || 'N/A'}\n` +
              `📝 ${dados.detalhes || 'Pagamento detectado via webhook PagarMe'}\n\n` +
              (dados.motivo || '');
+
+    case 'PAGAMENTO_SEM_BILHETE':
+      return `🚨 *PAGAMENTO SEM BILHETE DETECTADO*\n\n` +
+             `⏰ ${timestamp}\n` +
+             `🔑 Order: ${dados.orderId || 'N/A'}\n` +
+             `💰 Valor: R$ ${dados.valor?.toFixed(2) || 'N/A'}\n` +
+             `📝 ${dados.detalhes || 'Cliente pagou mas nenhum bilhete foi emitido'}\n` +
+             `🔄 Estorno automático acionado\n\n` +
+             (dados.ip ? `🌐 IP: ${dados.ip}\n` : '');
 
     default:
       return `📢 *GOOD TRIP*\n\n${timestamp}\n\n${dados.detalhes || 'Notificação'}`;

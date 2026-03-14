@@ -116,8 +116,11 @@ export async function GET(req: NextRequest): Promise<NextResponse<ApiResponse>> 
     const origemId = searchParams.get('origemId');
     const destinoId = searchParams.get('destinoId');
     const data = searchParams.get('data') as IsoDate | null;
+    // IDs originais da busca completa (ex: Altamira→Santa Inês), usados como fallback
+    const fullOrigemId = searchParams.get('fullOrigemId');
+    const fullDestinoId = searchParams.get('fullDestinoId');
 
-    console.log('🔍 [API Onibus Trecho] Params:', { servico, origemId, destinoId, data });
+    console.log('🔍 [API Onibus Trecho] Params:', { servico, origemId, destinoId, data, fullOrigemId, fullDestinoId });
 
     if (!servico || !origemId || !destinoId || !data) {
       return NextResponse.json(
@@ -126,64 +129,112 @@ export async function GET(req: NextRequest): Promise<NextResponse<ApiResponse>> 
       );
     }
 
-    // 🔥 ETAPA 1: Buscar corrida para validar serviço
+    // 🔥 ETAPA 1: Buscar corrida para obter metadata do serviço (opcional para conexões)
     console.log('📤 [API Onibus Trecho] Etapa 1: buscaCorrida');
-    
-    const corrida = await viopPostJSON<BuscaCorridaResp>(
-      "/consultacorrida/buscaCorrida",
-      { origem: parseInt(origemId, 10), destino: parseInt(destinoId, 10), data }
-    );
 
-    const svc = corrida.lsServicos?.find((s: ViopServico) => String(s.servico) === String(servico));
+    let svc: ViopServico | undefined;
+    try {
+      const corrida = await viopPostJSON<BuscaCorridaResp>(
+        "/consultacorrida/buscaCorrida",
+        { origem: parseInt(origemId, 10), destino: parseInt(destinoId, 10), data }
+      );
+      svc = corrida.lsServicos?.find((s: ViopServico) => String(s.servico) === String(servico));
 
-    if (!svc) {
-      console.warn('⚠️ [API Onibus Trecho] Serviço não encontrado:', servico);
+      if (svc) {
+        console.log('✅ [API Onibus Trecho] Serviço encontrado via buscaCorrida:', svc.servico);
+      } else {
+        console.log('⚠️ [API Onibus Trecho] Serviço não encontrado em buscaCorrida (pode ser trecho de conexão):', servico);
+      }
+    } catch (e) {
+      console.warn('⚠️ [API Onibus Trecho] buscaCorrida falhou, tentando buscaOnibus direto:', e instanceof Error ? e.message : e);
+    }
+
+    // 🔥 ETAPA 2: Buscar mapa de assentos — tentar com IDs do trecho primeiro
+    console.log('📤 [API Onibus Trecho] Etapa 2: buscaOnibus com IDs do trecho');
+
+    let mapa: BuscaOnibusResp | null = null;
+
+    try {
+      mapa = await viopPostJSON<BuscaOnibusResp>(
+        "/consultaonibus/buscaOnibus",
+        { servico, origem: origemId, destino: destinoId, data }
+      );
+    } catch (e) {
+      console.warn('⚠️ [API Onibus Trecho] buscaOnibus com IDs do trecho falhou:', e instanceof Error ? e.message : e);
+    }
+
+    // 🔥 ETAPA 2b: Se não retornou assentos e temos IDs originais, tentar com eles (fallback para conexões)
+    if ((!mapa?.mapaPoltrona || mapa.mapaPoltrona.length === 0) && fullOrigemId && fullDestinoId) {
+      console.log('📤 [API Onibus Trecho] Etapa 2b: buscaOnibus com IDs originais da busca:', { fullOrigemId, fullDestinoId });
+
+      // Também buscar metadata via buscaCorrida com IDs completos
+      if (!svc) {
+        try {
+          const corridaFull = await viopPostJSON<BuscaCorridaResp>(
+            "/consultacorrida/buscaCorrida",
+            { origem: parseInt(fullOrigemId, 10), destino: parseInt(fullDestinoId, 10), data }
+          );
+          // Buscar o serviço dentro de conexões
+          for (const s of (corridaFull.lsServicos || [])) {
+            if (String(s.servico) === String(servico)) {
+              svc = s;
+              console.log('✅ [API Onibus Trecho] Serviço encontrado via buscaCorrida full:', svc.servico);
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn('⚠️ [API Onibus Trecho] buscaCorrida full falhou:', e instanceof Error ? e.message : e);
+        }
+      }
+
+      try {
+        mapa = await viopPostJSON<BuscaOnibusResp>(
+          "/consultaonibus/buscaOnibus",
+          { servico, origem: fullOrigemId, destino: fullDestinoId, data }
+        );
+      } catch (e) {
+        console.warn('⚠️ [API Onibus Trecho] buscaOnibus com IDs originais também falhou:', e instanceof Error ? e.message : e);
+      }
+    }
+
+    if (!mapa?.mapaPoltrona || mapa.mapaPoltrona.length === 0) {
+      console.warn('⚠️ [API Onibus Trecho] Nenhum assento encontrado para servico:', servico);
       return NextResponse.json(
-        { ok: false, error: 'Serviço não encontrado' },
+        { ok: false, error: 'Nenhum assento disponível para este trecho' },
         { status: 404 }
       );
     }
 
-    console.log('✅ [API Onibus Trecho] Serviço encontrado:', svc.servico);
-
-    // 🔥 ETAPA 2: Buscar mapa de assentos
-    console.log('📤 [API Onibus Trecho] Etapa 2: buscaOnibus');
-    
-    const mapa = await viopPostJSON<BuscaOnibusResp>(
-      "/consultaonibus/buscaOnibus",
-      { servico, origem: origemId, destino: destinoId, data }
-    );
-
-    console.log(`✅ [API Onibus Trecho] Encontrado ${mapa.mapaPoltrona?.length || 0} assentos`);
+    console.log(`✅ [API Onibus Trecho] Encontrado ${mapa.mapaPoltrona.length} assentos`);
 
     // Retornar no mesmo formato que /api/viop/onibus
     return NextResponse.json({
       ok: true,
       seats: {
-        mapaPoltrona: mapa.mapaPoltrona || [],
+        mapaPoltrona: mapa.mapaPoltrona,
         origem: mapa.origem || { cidade: '', id: parseInt(origemId, 10) },
         destino: mapa.destino || { cidade: '', id: parseInt(destinoId, 10) },
       },
       serviceMeta: {
         servico: String(servico),
-        preco: svc.preco ?? null,
-        precoOriginal: svc.precoOriginal ?? null,
-        tarifa: svc.tarifa ?? null,
-        classe: svc.classe ?? null,
-        empresa: svc.empresa ?? null,
-        empresaId: svc.empresaId ?? null,
-        poltronasTotal: svc.poltronasTotal ?? mapa.mapaPoltrona?.length ?? null,
-        poltronasLivres: svc.poltronasLivres ?? mapa.poltronasLivres ?? null,
-        dataCorrida: (svc.dataCorrida ?? mapa.data) as IsoDate | null,
-        saida: svc.saida ?? mapa.dataSaida ?? null,
-        chegada: svc.chegada ?? mapa.dataChegada ?? null,
+        preco: svc?.preco ?? null,
+        precoOriginal: svc?.precoOriginal ?? null,
+        tarifa: svc?.tarifa ?? null,
+        classe: svc?.classe ?? mapa.classeServico ?? null,
+        empresa: svc?.empresa ?? null,
+        empresaId: svc?.empresaId ?? mapa.empresaCorridaId ?? null,
+        poltronasTotal: svc?.poltronasTotal ?? mapa.mapaPoltrona.length ?? null,
+        poltronasLivres: svc?.poltronasLivres ?? mapa.poltronasLivres ?? null,
+        dataCorrida: (svc?.dataCorrida ?? mapa.dataCorrida ?? mapa.data) as IsoDate | null,
+        saida: svc?.saida ?? mapa.dataSaida ?? null,
+        chegada: svc?.chegada ?? mapa.dataChegada ?? null,
       },
     });
 
   } catch (error) {
     const mensagem = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('❌ [API Onibus Trecho] Erro:', mensagem);
-    
+
     return NextResponse.json(
       { ok: false, error: mensagem },
       { status: 500 }

@@ -21,12 +21,18 @@ function PixContent() {
 
   const [copied, setCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState(initialTime);
-  const [checking, setChecking] = useState(false);
   const [qrCodeImage, setQrCodeImage] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [graceActive, setGraceActive] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expiredRef = useRef(false);
+  const graceActiveRef = useRef(false);
+  const checkingRef = useRef(false);
+
+  // 🔄 Manter refs sincronizados com states (evita re-runs do polling useEffect)
+  useEffect(() => { expiredRef.current = expired; }, [expired]);
+  useEffect(() => { graceActiveRef.current = graceActive; }, [graceActive]);
 
   // ⏱️ Contador de tempo
   useEffect(() => {
@@ -64,14 +70,9 @@ function PixContent() {
     };
   }, [expired]);
 
-  // 🛑 Parar polling de vez quando grace period acabar + notificar admin
+  // 📊 Tracking: PIX expirou sem pagamento (só após grace period)
   useEffect(() => {
     if (expired && !graceActive) {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-      // 📊 Tracking: PIX expirou sem pagamento (só após grace period)
       fetch('/api/tracking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,14 +84,24 @@ function PixContent() {
     }
   }, [expired, graceActive, orderId]);
 
-  // 🔄 Verifica pagamento (enquanto timer ativo OU durante grace period)
+  // 🔄 Verifica pagamento — único interval, refs controlam parada
   useEffect(() => {
-    if (!orderId || (expired && !graceActive)) return;
+    if (!orderId) return;
 
     const checkPayment = async () => {
-      if (checking) return;
+      // Se expirou e grace acabou, parar de vez
+      if (expiredRef.current && !graceActiveRef.current) {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
+        return;
+      }
 
-      setChecking(true);
+      // Evitar requests concorrentes
+      if (checkingRef.current) return;
+      checkingRef.current = true;
+
       try {
         const res = await fetch(`/api/payments/pagarme/check?order_id=${orderId}`);
         const data = await res.json() as PaymentCheckResponse;
@@ -105,7 +116,7 @@ function PixContent() {
       } catch (error: unknown) {
         console.error('Erro ao verificar pagamento:', error);
       } finally {
-        setChecking(false);
+        checkingRef.current = false;
       }
     };
 
@@ -117,7 +128,7 @@ function PixContent() {
         pollingRef.current = null;
       }
     };
-  }, [orderId, expired, graceActive]);
+  }, [orderId]);
 
   // 🖼️ GERA O QR CODE REAL
   useEffect(() => {

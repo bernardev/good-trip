@@ -41,6 +41,8 @@ type TrechoData = {
   origemNome: string;
   destinoNome: string;
   data: string;
+  fullOrigemId?: string;
+  fullDestinoId?: string;
 };
 
 function safeDate(value: string): Date | null {
@@ -179,9 +181,11 @@ export function TripCard({ trip, onSelect }: TripCardProps) {
 
       setExpandido(true);
 
-      // Buscar assentos dos 2 trechos
-      void buscarAssentos(0, trip.conexao.trechos[0].servico, String(trip.conexao.trechos[0].origem), String(trip.conexao.trechos[0].destino));
-      void buscarAssentos(1, trip.conexao.trechos[1].servico, String(trip.conexao.trechos[1].origem), String(trip.conexao.trechos[1].destino));
+      // Buscar assentos dos 2 trechos (passar IDs originais da busca como fallback)
+      const fullOrigem = trip.departureCityCode || trip.departureCity;
+      const fullDestino = trip.arrivalCityCode || trip.arrivalCity;
+      void buscarAssentos(0, trip.conexao.trechos[0].servico, String(trip.conexao.trechos[0].origem), String(trip.conexao.trechos[0].destino), fullOrigem, fullDestino);
+      void buscarAssentos(1, trip.conexao.trechos[1].servico, String(trip.conexao.trechos[1].origem), String(trip.conexao.trechos[1].destino), fullOrigem, fullDestino);
     } else {
       // Viagem normal: 1 trecho
       const servico = trip.id.replace(/^viop-/, '').split('-')[0];
@@ -205,11 +209,14 @@ export function TripCard({ trip, onSelect }: TripCardProps) {
     }
   };
 
-  const buscarAssentos = async (index: number, servico: string, origem: string, destino: string): Promise<void> => {
+  const buscarAssentos = async (index: number, servico: string, origem: string, destino: string, fullOrigemId?: string, fullDestinoId?: string): Promise<void> => {
     try {
-      // 🔥 Para conexões, usar API específica de trechos
+      // 🔥 Para conexões, usar API específica de trechos + IDs originais da busca como fallback
       const endpoint = isConexao ? '/api/viop/onibus-trecho' : '/api/viop/onibus';
-      const url = `${endpoint}?servico=${servico}&origemId=${origem}&destinoId=${destino}&data=${dataViagem}`;
+      let url = `${endpoint}?servico=${servico}&origemId=${origem}&destinoId=${destino}&data=${dataViagem}`;
+      if (isConexao && fullOrigemId && fullDestinoId) {
+        url += `&fullOrigemId=${fullOrigemId}&fullDestinoId=${fullDestinoId}`;
+      }
       
       
       const response = await fetch(url);
@@ -350,6 +357,8 @@ export function TripCard({ trip, onSelect }: TripCardProps) {
           origemNome: trip.conexao.trechos[0].origemDescricao,
           destinoNome: trip.conexao.trechos[0].destinoDescricao,
           data: dataViagem,
+          fullOrigemId: trip.departureCityCode || trip.departureCity,
+          fullDestinoId: trip.arrivalCityCode || trip.arrivalCity,
         },
         {
           servico: trip.conexao.trechos[1].servico,
@@ -358,6 +367,8 @@ export function TripCard({ trip, onSelect }: TripCardProps) {
           origemNome: trip.conexao.trechos[1].origemDescricao,
           destinoNome: trip.conexao.trechos[1].destinoDescricao,
           data: dataViagem,
+          fullOrigemId: trip.departureCityCode || trip.departureCity,
+          fullDestinoId: trip.arrivalCityCode || trip.arrivalCity,
         },
       ]
     : [
